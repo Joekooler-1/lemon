@@ -7,7 +7,6 @@ import os
 import shutil
 from openpyxl import load_workbook
 
-
 # --- Editable Constants ---
 PRIMARY_FOLDER = r"C:\folder\primary"  # Edit to your primary folder path
 SECONDARY_FOLDER = r"C:\folder\secondary"  # Edit to your secondary folder path
@@ -15,7 +14,7 @@ MAIN_FILE_PATH = r"C:\folder\main_file.xlsx"  # Edit to your main file path
 TEMPLATE_FILE_PATH = r"C:\folder\template.xlsx"  # Edit to your template file path
 OUTPUT_FOLDER = r"C:\folder\output"  # Edit to your output folder path
 
-# Header mappings between template headers and processed data columns
+# Header mappings between template headers and processed data
 HEADER_MAPPING = {
     "TRADE ID": "TRADEIDENTIFIER",
     "Adjusted P&L": "Adjusted_P&L",
@@ -23,7 +22,6 @@ HEADER_MAPPING = {
     "Offer": "Offer",
     "TRADE DATE": "TRADE DATE",
     "SPREAD": "SPREAD"
-    # Add additional mappings as needed
 }
 
 # Default values for new rows
@@ -46,15 +44,15 @@ DATE_FORMAT = "%Y-%m-%d"
 
 def calculate_amortization(start_date, current_date, value):
     """
-    Calculate the amortized value based on elapsed time.
+    Calculate the amortized value for the given time period.
 
     Args:
-        start_date (datetime): The starting date of the amortization.
-        current_date (datetime): The date used for calculation.
-        value (float): Initial value to amortize.
+        start_date (datetime): Start date of the amortization.
+        current_date (datetime): Current date for calculation.
+        value (float): Value to amortize.
 
     Returns:
-        float: The remaining amortized value.
+        float: Amortized value adjusted for the elapsed time.
     """
     fraction_year_passed = (current_date - start_date).days / 365
     months_passed = fraction_year_passed * 12
@@ -63,12 +61,12 @@ def calculate_amortization(start_date, current_date, value):
 
 class StatementGeneratorApp:
     """
-    A GUI-based statement generator for managing, processing, and generating client-specific data files.
+    GUI-based statement generator for managing, processing, and generating client-specific data files.
     """
 
     def __init__(self, root):
         """
-        Initialize the application, load data, and create the UI components.
+        Initialize the application, load data, and create UI components.
 
         Args:
             root (tk.Tk): Root Tkinter window.
@@ -83,7 +81,7 @@ class StatementGeneratorApp:
         # Load main data
         self.main_data = self.load_main_file()
 
-        # Set up the UI
+        # Create UI components
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True)
         self.create_tabs()
@@ -92,9 +90,6 @@ class StatementGeneratorApp:
     def load_main_file(self):
         """
         Load the main file into a DataFrame.
-
-        Returns:
-            pd.DataFrame: Main file data.
         """
         try:
             return pd.read_excel(self.main_file_path)
@@ -148,10 +143,9 @@ class StatementGeneratorApp:
         self.moved_file_label.config(text="File not found in either folder.")
         self.moved_file_path = None
 
-    # --- Processing Files ---
     def process_files(self):
         """
-        Merge, calculate, and generate client-specific statements based on the main and moved files.
+        Process the main and moved files, generate calculations, and prepare the output.
         """
         if not self.moved_file_path:
             messagebox.showerror("Error", "Please select a moved file.")
@@ -231,20 +225,21 @@ class StatementGeneratorApp:
                 value = row.get(mapped_header, "")
                 sheet.cell(row=start_row + idx + 1, column=col_idx + 2).value = value
 
-        output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
-        workbook.save(output_path)
+        # Save the output file
+        excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
+        workbook.save(excel_output_path)
 
-    # --- UI Setup ---
+    # --- UI Tabs ---
     def create_tabs(self):
         """
-        Set up the tabbed interface.
+        Create tabs for managing data and processing files.
         """
         self.create_process_files_tab()
         self.create_edit_main_file_tab()
 
     def create_process_files_tab(self):
         """
-        Tab for processing moved files.
+        Create the tab for processing moved files.
         """
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Process Files")
@@ -262,7 +257,7 @@ class StatementGeneratorApp:
 
     def create_edit_main_file_tab(self):
         """
-        Tab for viewing and editing the main file.
+        Create the tab for editing the main file.
         """
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Edit Main File")
@@ -272,21 +267,15 @@ class StatementGeneratorApp:
         ttk.Button(button_frame, text="Save Changes", command=self.save_main_file, width=15).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Add Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Edit Row", command=self.edit_selected_row, width=15).pack(side="left", padx=5)
 
         self.create_treeview(frame)
         self.populate_treeview()
 
-    def populate_treeview(self):
-        """
-        Populate the Treeview with the current main file data.
-        """
-        self.tree.delete(*self.tree.get_children())
-        for _, row in self.main_data.iterrows():
-            self.tree.insert("", "end", values=list(row))
-
+    # --- Treeview Management ---
     def create_treeview(self, frame):
         """
-        Set up the Treeview for data display.
+        Create the Treeview widget for displaying data.
         """
         self.tree = ttk.Treeview(frame, show="headings", height=15)
         self.tree["columns"] = list(self.main_data.columns)
@@ -306,6 +295,14 @@ class StatementGeneratorApp:
         self.tree.grid(row=1, column=0, sticky="nsew")
         frame.grid_rowconfigure(1, weight=1)
         frame.grid_columnconfigure(0, weight=1)
+
+    def populate_treeview(self):
+        """
+        Populate the Treeview with data from the main file.
+        """
+        self.tree.delete(*self.tree.get_children())
+        for _, row in self.main_data.iterrows():
+            self.tree.insert("", "end", values=list(row))
 
 
 # --- Main Execution ---
