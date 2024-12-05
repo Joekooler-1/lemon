@@ -5,9 +5,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import shutil
-import tempfile
 from openpyxl import load_workbook
-import win32com.client.gencache
 
 
 # --- Editable Constants ---
@@ -139,7 +137,7 @@ class StatementGeneratorApp:
     # --- Process Files ---
     def process_files(self):
         """
-        Process the main and moved files, generate statements for each FUND ID, and draft emails.
+        Process the main and moved files, generate statements for each FUND ID.
         """
         if not self.moved_file_path:
             messagebox.showerror("Error", "Please select a moved file.")
@@ -163,10 +161,9 @@ class StatementGeneratorApp:
             unique_funds = processed_data[client_column].unique()
             for fund_id in unique_funds:
                 client_data = processed_data[processed_data[client_column] == fund_id]
-                excel_output, pdf_output = self.fill_template(fund_id, client_data)
-                self.draft_email(fund_id, excel_output, pdf_output)
+                self.fill_template(fund_id, client_data)
 
-            messagebox.showinfo("Success", "Statements generated and email drafts created.")
+            messagebox.showinfo("Success", "Statements generated.")
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred: {e}")
 
@@ -205,14 +202,11 @@ class StatementGeneratorApp:
     # --- Fill Template ---
     def fill_template(self, fund_id, data):
         """
-        Fill the template with client-specific data and save as Excel and PDF.
+        Fill the template with client-specific data and save as Excel.
 
         Args:
             fund_id (str): Unique identifier for the client (FUND ID).
             data (pd.DataFrame): The client's processed data.
-
-        Returns:
-            tuple: Paths to the saved Excel and PDF files.
         """
         workbook = load_workbook(TEMPLATE_FILE_PATH)
         sheet = workbook.active
@@ -231,47 +225,16 @@ class StatementGeneratorApp:
                 sheet.cell(row=start_row + idx, column=col_idx + 2).value = value
 
         excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
-        pdf_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.pdf")
-
         workbook.save(excel_output_path)
-        self.convert_to_pdf(excel_output_path, pdf_output_path)
-
-        return excel_output_path, pdf_output_path
-
-    # --- Convert to PDF ---
-    def convert_to_pdf(self, excel_path, pdf_path):
-        """
-        Convert an Excel file to PDF using Microsoft Excel.
-
-        Args:
-            excel_path (str): Path to the Excel file.
-            pdf_path (str): Path to save the PDF.
-        """
-        try:
-            excel = win32com.client.gencache.EnsureDispatch("Excel.Application")
-            try:
-                excel.Visible = False
-            except Exception as e:
-                print(f"Warning: Could not set Excel visibility: {e}")
-
-            workbook = excel.Workbooks.Open(excel_path)
-            workbook.ExportAsFixedFormat(0, pdf_path)
-            workbook.Close(False)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to convert Excel to PDF: {e}")
-        finally:
-            if "excel" in locals():
-                excel.Quit()
 
     # --- Draft Email ---
-    def draft_email(self, fund_id, excel_path, pdf_path):
+    def draft_email(self, fund_id, excel_path):
         """
         Draft an email for the client with their statement files attached.
 
         Args:
             fund_id (str): Unique identifier for the client (FUND ID).
             excel_path (str): Path to the client's Excel file.
-            pdf_path (str): Path to the client's PDF file.
         """
         outlook = win32com.client.Dispatch("Outlook.Application")
         mail = outlook.CreateItem(0)
@@ -280,7 +243,6 @@ class StatementGeneratorApp:
             mail.Subject = f"Statement for FUND ID: {fund_id}"
             mail.Body = f"Dear {fund_id},\n\nPlease find attached your statement for today.\n\nBest regards,"
             mail.Attachments.Add(excel_path)
-            mail.Attachments.Add(pdf_path)
             mail.Display(False)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to draft email for FUND ID {fund_id}: {e}")
