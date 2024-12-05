@@ -119,6 +119,37 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh the main file: {e}")
 
+    def select_moved_file(self):
+        """
+        Automatically select the moved file based on the selected date.
+        Searches the primary folder first, then the secondary folder.
+        If found in the secondary folder, copies it to the primary folder.
+        """
+        # Get the selected date from the calendar
+        selected_date = self.date_picker.get_date()
+        formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y-%m-%d")
+        expected_file_name = f"moved_file_{formatted_date}.csv"
+
+        # Check the primary folder
+        primary_path = os.path.join(PRIMARY_FOLDER, expected_file_name)
+        if os.path.exists(primary_path):
+            self.moved_file_path = primary_path
+            self.moved_file_label.config(text=f"File found: {self.moved_file_path}")
+            return
+
+        # Check the secondary folder
+        secondary_path = os.path.join(SECONDARY_FOLDER, expected_file_name)
+        if os.path.exists(secondary_path):
+            # Copy the file to the primary folder
+            shutil.copy(secondary_path, primary_path)
+            self.moved_file_path = primary_path
+            self.moved_file_label.config(text=f"File copied: {self.moved_file_path}")
+            return
+
+        # File not found in either folder
+        self.moved_file_label.config(text="File not found in either folder.")
+        self.moved_file_path = None
+
     def add_new_row(self):
         """
         Add a new row to the Treeview and main file.
@@ -157,41 +188,6 @@ class StatementGeneratorApp:
 
         # Add Save button to popup
         tk.Button(popup, text="Save Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
-
-    def edit_selected_row(self):
-        """
-        Edit the selected row from the Treeview.
-        """
-        selected_item = self.tree.focus()
-        if not selected_item:
-            messagebox.showerror("Error", "No row selected.")
-            return
-
-        row_values = self.tree.item(selected_item, "values")
-        popup = tk.Toplevel(self.root)
-        popup.title("Edit Selected Row")
-        popup.geometry("500x500")
-
-        entries = {}
-        for i, col in enumerate(self.main_data.columns):
-            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
-
-            entry = tk.Entry(popup)
-            entry.insert(0, row_values[i])
-            entry.grid(row=i, column=1, padx=10, pady=5)
-            entries[col] = entry
-
-        def save_changes():
-            """
-            Save changes to the selected row and refresh the UI.
-            """
-            new_values = [entries[col].get() for col in self.main_data.columns]
-            self.main_data.iloc[int(self.tree.index(selected_item))] = new_values
-            self.save_main_file()
-            self.refresh_main_file()
-            popup.destroy()
-
-        tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
 
     def process_files(self):
         """
