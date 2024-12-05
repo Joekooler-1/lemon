@@ -192,8 +192,26 @@ class StatementGeneratorApp:
         """
         Create tabs for editing the main file and processing moved files.
         """
-        self.create_edit_main_file_tab()
         self.create_process_files_tab()
+        self.create_edit_main_file_tab()
+
+    def create_process_files_tab(self):
+        """
+        Create the tab for processing moved files.
+        """
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Process Files")
+
+        tk.Label(frame, text="Moved File (CSV):").grid(row=0, column=0, padx=10, pady=5)
+        self.moved_file_label = tk.Label(frame, text="No file selected")
+        self.moved_file_label.grid(row=0, column=1, padx=10, pady=5)
+        ttk.Button(frame, text="Browse", command=self.select_moved_file).grid(row=0, column=2, padx=10, pady=5)
+
+        tk.Label(frame, text="Date:").grid(row=1, column=0, padx=10, pady=5)
+        self.date_picker = Calendar(frame, selectmode="day", date_pattern="yyyy-mm-dd")
+        self.date_picker.grid(row=1, column=1, columnspan=2, padx=10, pady=5)
+
+        ttk.Button(frame, text="Process Files", command=self.process_files).grid(row=2, column=1, padx=10, pady=10)
 
     def create_edit_main_file_tab(self):
         """
@@ -211,19 +229,6 @@ class StatementGeneratorApp:
         ttk.Button(frame, text="Edit Selected Row", command=self.edit_selected_row).grid(row=3, column=0, pady=10, sticky="ew")
         ttk.Button(frame, text="Add New Row", command=self.add_new_row).grid(row=4, column=0, pady=10, sticky="ew")
         ttk.Button(frame, text="Refresh", command=self.refresh_main_file).grid(row=5, column=0, pady=10, sticky="ew")
-
-    def create_process_files_tab(self):
-        """
-        Create the tab for processing moved files.
-        """
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Process Files")
-
-        tk.Label(frame, text="Moved File (CSV):").grid(row=0, column=0, padx=10, pady=5)
-        self.moved_file_label = tk.Label(frame, text="No file selected")
-        self.moved_file_label.grid(row=0, column=1, padx=10, pady=5)
-        ttk.Button(frame, text="Browse", command=self.select_moved_file).grid(row=0, column=2, padx=10, pady=5)
-        ttk.Button(frame, text="Process Files", command=self.process_files).grid(row=2, column=1, padx=10, pady=10)
 
     # --- Editing and Adding Rows ---
     def edit_selected_row(self):
