@@ -189,6 +189,7 @@ class StatementGeneratorApp:
         def save_changes():
             new_values = [entries[col].get() for col in self.tree["columns"]]
             self.tree.item(selected_item, values=new_values)
+            self.save_changes_to_main_file()  # Save changes automatically
             popup.destroy()
 
         tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
@@ -196,6 +197,7 @@ class StatementGeneratorApp:
     def add_new_row(self):
         """
         Add a new row to the Treeview.
+        Automatically saves the new row to the main file after adding.
         """
         popup = tk.Toplevel(self.root)
         popup.title("Add New Row")
@@ -204,13 +206,19 @@ class StatementGeneratorApp:
         for i, col in enumerate(self.tree["columns"]):
             tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
             entry = tk.Entry(popup)
-            entry.insert(0, DEFAULT_VALUES.get(col, ""))
+            entry.insert(0, DEFAULT_VALUES.get(col, ""))  # Pre-fill with default values or leave blank
             entry.grid(row=i, column=1, padx=10, pady=5)
             entries[col] = entry
 
         def add_row():
+            # Insert new row into the Treeview
             new_values = [entries[col].get() for col in self.tree["columns"]]
             self.tree.insert("", "end", values=new_values)
+
+            # Save changes automatically
+            self.save_changes_to_main_file()
+
+            # Close the popup
             popup.destroy()
 
         tk.Button(popup, text="Add Row", command=add_row).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
