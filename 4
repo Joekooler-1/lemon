@@ -119,29 +119,79 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh the main file: {e}")
 
-    def select_moved_file(self):
+    def add_new_row(self):
         """
-        Automatically select the moved file based on the selected date.
+        Add a new row to the Treeview and main file.
         """
-        selected_date = self.date_picker.get_date()
-        formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y-%m-%d")
-        expected_file_name = f"moved_file_{formatted_date}.csv"
-
-        primary_path = os.path.join(PRIMARY_FOLDER, expected_file_name)
-        if os.path.exists(primary_path):
-            self.moved_file_path = primary_path
-            self.moved_file_label.config(text=f"File found: {self.moved_file_path}")
+        if self.main_data is None:
+            messagebox.showerror("Error", "Main file not loaded. Cannot add rows.")
             return
 
-        secondary_path = os.path.join(SECONDARY_FOLDER, expected_file_name)
-        if os.path.exists(secondary_path):
-            shutil.copy(secondary_path, primary_path)
-            self.moved_file_path = primary_path
-            self.moved_file_label.config(text=f"File copied: {self.moved_file_path}")
+        # Popup window for adding a new row
+        popup = tk.Toplevel(self.root)
+        popup.title("Add New Row")
+        popup.geometry("500x500")
+
+        # Create input fields for each column
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+
+            # Set default values or leave blank
+            default_value = DEFAULT_VALUES.get(col, "")
+            entry = tk.Entry(popup)
+            entry.insert(0, default_value)
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        # Save the new row and refresh UI
+        def save_row():
+            try:
+                new_row = {col: entries[col].get() for col in self.main_data.columns}
+                self.main_data = pd.concat([self.main_data, pd.DataFrame([new_row])], ignore_index=True)
+                self.save_main_file()
+                self.refresh_main_file()
+                popup.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to add row: {e}")
+
+        # Add Save button to popup
+        tk.Button(popup, text="Save Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
+
+    def edit_selected_row(self):
+        """
+        Edit the selected row from the Treeview.
+        """
+        selected_item = self.tree.focus()
+        if not selected_item:
+            messagebox.showerror("Error", "No row selected.")
             return
 
-        self.moved_file_label.config(text="File not found in either folder.")
-        self.moved_file_path = None
+        row_values = self.tree.item(selected_item, "values")
+        popup = tk.Toplevel(self.root)
+        popup.title("Edit Selected Row")
+        popup.geometry("500x500")
+
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+
+            entry = tk.Entry(popup)
+            entry.insert(0, row_values[i])
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        def save_changes():
+            """
+            Save changes to the selected row and refresh the UI.
+            """
+            new_values = [entries[col].get() for col in self.main_data.columns]
+            self.main_data.iloc[int(self.tree.index(selected_item))] = new_values
+            self.save_main_file()
+            self.refresh_main_file()
+            popup.destroy()
+
+        tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
 
     def process_files(self):
         """
@@ -272,7 +322,6 @@ class StatementGeneratorApp:
         self.create_treeview(frame)
         self.populate_treeview()
 
-    # --- Treeview Management ---
     def create_treeview(self, frame):
         """
         Create the Treeview widget for displaying data.
