@@ -102,6 +102,17 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save the main file: {e}")
 
+    def refresh_main_file(self):
+        """
+        Reload the main file and refresh the Treeview with updated data.
+        """
+        try:
+            self.main_data = self.load_main_file()
+            self.populate_treeview()
+            messagebox.showinfo("Success", "Main file refreshed successfully.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh the main file: {e}")
+
     def select_moved_file(self):
         """
         Automatically select the moved file based on the selected date.
@@ -212,6 +223,61 @@ class StatementGeneratorApp:
 
         os.startfile(temp_filename)
 
+    # --- Treeview Management ---
+    def populate_treeview(self):
+        """
+        Populate the Treeview with data from the main file.
+        Clears existing data in the Treeview and inserts rows from self.main_data.
+        """
+        self.tree.delete(*self.tree.get_children())
+        formatted_data = self.format_date_columns(self.main_data)
+        for _, row in formatted_data.iterrows():
+            self.tree.insert("", "end", values=list(row))
+
+    def create_treeview(self, frame):
+        """
+        Create and configure a Treeview widget for displaying data.
+
+        Args:
+            frame (ttk.Frame): The parent frame for the Treeview.
+        """
+        self.tree = ttk.Treeview(frame, show="headings", height=15)
+        self.tree["columns"] = list(self.main_data.columns)
+
+        for col in self.main_data.columns:
+            self.tree.heading(col, text=col, anchor="w")
+            self.tree.column(col, width=120, anchor="w")
+
+        scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
+        scroll_y.grid(row=1, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=scroll_y.set)
+
+        scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
+        scroll_x.grid(row=2, column=0, sticky="ew")
+        self.tree.configure(xscrollcommand=scroll_x.set)
+
+        self.tree.grid(row=1, column=0, sticky="nsew")
+        frame.grid_rowconfigure(1, weight=1)
+        frame.grid_columnconfigure(0, weight=1)
+
+    # --- Data Formatting ---
+    def format_date_columns(self, dataframe):
+        """
+        Format date columns in the DataFrame to the specified DATE_FORMAT.
+
+        Args:
+            dataframe (pd.DataFrame): The DataFrame to format.
+
+        Returns:
+            pd.DataFrame: The formatted DataFrame.
+        """
+        for col in DATE_COLUMNS:
+            if col in dataframe.columns:
+                dataframe[col] = dataframe[col].apply(
+                    lambda x: x if isinstance(x, str) else (x.strftime(DATE_FORMAT) if pd.notna(x) else "")
+                )
+        return dataframe
+
     # --- UI Components ---
     def create_tabs(self):
         """
@@ -255,32 +321,6 @@ class StatementGeneratorApp:
         # Create Treeview below
         self.create_treeview(frame)
         self.populate_treeview()
-
-    def create_treeview(self, frame):
-        """
-        Create and configure a Treeview widget for displaying data.
-
-        Args:
-            frame (ttk.Frame): The parent frame for the Treeview.
-        """
-        self.tree = ttk.Treeview(frame, show="headings", height=15)
-        self.tree["columns"] = list(self.main_data.columns)
-
-        for col in self.main_data.columns:
-            self.tree.heading(col, text=col, anchor="w")
-            self.tree.column(col, width=120, anchor="w")
-
-        scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
-        scroll_y.grid(row=1, column=1, sticky="ns")
-        self.tree.configure(yscrollcommand=scroll_y.set)
-
-        scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
-        scroll_x.grid(row=2, column=0, sticky="ew")
-        self.tree.configure(xscrollcommand=scroll_x.set)
-
-        self.tree.grid(row=1, column=0, sticky="nsew")
-        frame.grid_rowconfigure(1, weight=1)
-        frame.grid_columnconfigure(0, weight=1)
 
 
 # --- Main Execution ---
