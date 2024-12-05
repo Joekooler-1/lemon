@@ -4,7 +4,6 @@ from tkcalendar import Calendar
 import pandas as pd
 from datetime import datetime
 import os
-import shutil
 
 
 def calculate_amortization(start_date, current_date, value):
@@ -38,7 +37,7 @@ class StatementGeneratorApp:
 
         # File paths
         self.main_file_path = None  # Path to the main file
-        self.moved_file_path = None  # Path to the moved file
+        self.moved_file_path = None  # Path to the moved file (CSV)
 
         # Main File Selector
         tk.Label(root, text="Main File:").grid(row=0, column=0, padx=10, pady=5)
@@ -47,7 +46,7 @@ class StatementGeneratorApp:
         tk.Button(root, text="Browse", command=self.select_main_file).grid(row=0, column=2, padx=10, pady=5)
 
         # Moved File Selector
-        tk.Label(root, text="Moved File:").grid(row=1, column=0, padx=10, pady=5)
+        tk.Label(root, text="Moved File (CSV):").grid(row=1, column=0, padx=10, pady=5)
         self.moved_file_label = tk.Label(root, text="No file selected")
         self.moved_file_label.grid(row=1, column=1, padx=10, pady=5)
         tk.Button(root, text="Browse", command=self.select_moved_file).grid(row=1, column=2, padx=10, pady=5)
@@ -81,9 +80,9 @@ class StatementGeneratorApp:
 
     def select_moved_file(self):
         """
-        Opens a file dialog for the user to select the moved file.
+        Opens a file dialog for the user to select the moved file (CSV).
         """
-        self.moved_file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+        self.moved_file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if self.moved_file_path:
             self.moved_file_label.config(text=self.moved_file_path)
 
@@ -98,11 +97,13 @@ class StatementGeneratorApp:
             return
 
         try:
-            # Load main file and moved file
+            # Load main file (Excel)
             main_data = pd.read_excel(self.main_file_path)
-            moved_data = pd.read_excel(self.moved_file_path)
 
-            # Ensure TRADEIDENTIFIER matches
+            # Load moved file (CSV)
+            moved_data = pd.read_csv(self.moved_file_path)
+
+            # Ensure TRADEIDENTIFIER matches (use only the first 7 characters)
             moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].str[:7]
             main_data['TRADEIDENTIFIER'] = main_data['TRADEIDENTIFIER'].astype(str)
             moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].astype(str)
