@@ -63,20 +63,20 @@ class StatementGeneratorApp:
 
     def create_edit_main_file_tab(self):
         """
-        Create a tab for editing the main file with improved scrollbars and smaller table size.
+        Create a tab for editing the main file with improved scrollbars, edit, and add functionalities.
         """
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Edit Main File")
 
         # Create Treeview with limited height
         self.tree = ttk.Treeview(frame, show="headings", height=10)  # Display only 10 rows at a time
-        self.tree.grid(row=0, column=0, sticky="nsew")
+        self.tree.grid(row=0, column=0, columnspan=3, sticky="nsew")
 
         # Configure scrollbars
         scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
-        scroll_y.grid(row=0, column=1, sticky="ns")
+        scroll_y.grid(row=0, column=3, sticky="ns")
         scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
-        scroll_x.grid(row=1, column=0, sticky="ew")
+        scroll_x.grid(row=1, column=0, columnspan=3, sticky="ew")
         self.tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
 
         # Adjust frame weights for resizing
@@ -90,9 +90,18 @@ class StatementGeneratorApp:
         save_button = ttk.Button(frame, text="Save Changes", command=self.save_changes_to_main_file)
         save_button.grid(row=2, column=0, pady=10, sticky="ew")
 
+        # Add Edit Button
+        edit_button = ttk.Button(frame, text="Edit Selected Row", command=self.edit_selected_row)
+        edit_button.grid(row=2, column=1, pady=10, sticky="ew")
+
+        # Add New Row Button
+        add_button = ttk.Button(frame, text="Add New Row", command=self.add_new_row)
+        add_button.grid(row=2, column=2, pady=10, sticky="ew")
+
     def populate_treeview(self):
         """
         Populate the Treeview with data from the main file.
+        Ensures date columns are displayed without time components.
         """
         # Define columns
         self.tree["columns"] = list(self.main_data.columns)
@@ -102,8 +111,18 @@ class StatementGeneratorApp:
             self.tree.heading(col, text=col, anchor="w")
             self.tree.column(col, width=100, anchor="w")  # Set column width and alignment
 
+        # Ensure date columns are displayed without time
+        date_columns = {"TRADE DATE", "Effective Date", "Maturity Date"}
+        formatted_data = self.main_data.copy()
+
+        for col in date_columns:
+            if col in formatted_data.columns:
+                formatted_data[col] = formatted_data[col].apply(
+                    lambda x: x.strftime("%Y-%m-%d") if pd.notna(x) else ""
+                )
+
         # Insert rows
-        for idx, row in self.main_data.iterrows():
+        for idx, row in formatted_data.iterrows():
             self.tree.insert("", "end", values=list(row))
 
     def save_changes_to_main_file(self):
@@ -120,6 +139,67 @@ class StatementGeneratorApp:
 
         # Save the updated main file
         self.save_main_file()
+
+    def edit_selected_row(self):
+        """
+        Edit the selected row in the Treeview.
+        Opens a popup window to edit the row values.
+        """
+        selected_item = self.tree.focus()
+        if not selected_item:
+            messagebox.showwarning("Warning", "Please select a row to edit.")
+            return
+
+        # Get current values of the selected row
+        current_values = self.tree.item(selected_item)["values"]
+
+        # Create a popup window
+        popup = tk.Toplevel(self.root)
+        popup.title("Edit Row")
+
+        # Create entry fields for each column
+        entries = {}
+        for i, col in enumerate(self.tree["columns"]):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+            entry = tk.Entry(popup)
+            entry.insert(0, current_values[i])
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        # Save changes button
+        def save_changes():
+            # Update the Treeview with new values
+            new_values = [entries[col].get() for col in self.tree["columns"]]
+            self.tree.item(selected_item, values=new_values)
+            popup.destroy()
+
+        tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
+
+    def add_new_row(self):
+        """
+        Add a new row to the Treeview.
+        Opens a popup window with text boxes for all columns.
+        """
+        # Create a popup window
+        popup = tk.Toplevel(self.root)
+        popup.title("Add New Row")
+
+        # Create entry fields for each column
+        entries = {}
+        for i, col in enumerate(self.tree["columns"]):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+            entry = tk.Entry(popup)
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        # Add row button
+        def add_row():
+            # Insert a new row into the Treeview
+            new_values = [entries[col].get() for col in self.tree["columns"]]
+            self.tree.insert("", "end", values=new_values)
+            popup.destroy()
+
+        tk.Button(popup, text="Add Row", command=add_row).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
 
     def create_process_files_tab(self):
         """
