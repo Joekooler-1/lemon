@@ -113,35 +113,56 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh the main file: {e}")
 
+    def add_new_row(self):
+        """
+        Add a new row to the Treeview and refresh the file.
+        """
+        popup = tk.Toplevel(self.root)
+        popup.title("Add New Row")
+        popup.geometry("400x400")
+
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+            entry = tk.Entry(popup)
+            entry.insert(0, DEFAULT_VALUES.get(col, ""))
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        def save_row():
+            """
+            Validate and save the new row to the Treeview and main file.
+            """
+            new_row = {col: entries[col].get() for col in self.main_data.columns}
+            self.main_data = self.main_data.append(new_row, ignore_index=True)
+            self.save_main_file()
+            self.refresh_main_file()
+            popup.destroy()
+
+        tk.Button(popup, text="Add Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
+
     def select_moved_file(self):
         """
         Automatically select the moved file based on the selected date.
         Searches in the primary folder, and if not found, looks in the secondary folder and copies the file.
         """
-        # Get the selected date from the calendar
         selected_date = self.date_picker.get_date()
-        formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y%m%d")
+        formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y-%m-%d")  # Adjusted for hyphens
         expected_file_name = f"moved_file_{formatted_date}.csv"
 
-        # Search in the primary folder
         primary_path = os.path.join(PRIMARY_FOLDER, expected_file_name)
         if os.path.exists(primary_path):
             self.moved_file_path = primary_path
             self.moved_file_label.config(text=f"File found: {self.moved_file_path}")
             return
 
-        # Search in the secondary folder
         secondary_path = os.path.join(SECONDARY_FOLDER, expected_file_name)
         if os.path.exists(secondary_path):
-            # Copy the file to the primary folder
             shutil.copy(secondary_path, primary_path)
             self.moved_file_path = primary_path
-            self.moved_file_label.config(
-                text=f"File copied from secondary folder to primary folder: {self.moved_file_path}"
-            )
+            self.moved_file_label.config(text=f"File copied: {self.moved_file_path}")
             return
 
-        # File not found
         self.moved_file_label.config(text="File not found in either folder.")
         self.moved_file_path = None
 
@@ -260,7 +281,6 @@ class StatementGeneratorApp:
         frame.grid_rowconfigure(1, weight=1)
         frame.grid_columnconfigure(0, weight=1)
 
-    # --- Data Formatting ---
     def format_date_columns(self, dataframe):
         """
         Format date columns in the DataFrame to the specified DATE_FORMAT.
@@ -278,7 +298,6 @@ class StatementGeneratorApp:
                 )
         return dataframe
 
-    # --- UI Components ---
     def create_tabs(self):
         """
         Create tabs for editing the main file and processing moved files.
@@ -310,15 +329,12 @@ class StatementGeneratorApp:
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Edit Main File")
 
-        # Button Frame at the top
         button_frame = ttk.Frame(frame)
         button_frame.grid(row=0, column=0, pady=5, sticky="ew")
-
-        # Buttons in a row
         ttk.Button(button_frame, text="Save Changes", command=self.save_main_file, width=15).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Add Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
 
-        # Create Treeview below
         self.create_treeview(frame)
         self.populate_treeview()
 
