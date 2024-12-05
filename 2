@@ -228,19 +228,27 @@ class StatementGeneratorApp:
         formatted_values = []
         for col, entry in entries.items():
             value = entry.get()
+
+            # Validate and format date columns
             if col in DATE_COLUMNS:
                 try:
                     value = datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d")
                 except ValueError:
                     messagebox.showerror("Error", f"Invalid date format for column {col}. Use YYYY-MM-DD.")
                     return None
-            elif col in ["Receive Rate"]:
+
+            # Validate and format numeric columns
+            elif col in ["Receive Rate", "Bid", "Offer", "PV", "SPREAD"]:
                 try:
-                    value = f"{float(value):.3f}"  # Format to 3 decimal places
+                    value = float(value)  # Convert to float
+                    value = f"{value:.3f}"  # Format to 3 decimal places
                 except ValueError:
                     messagebox.showerror("Error", f"Invalid numeric format for column {col}.")
                     return None
+
+            # Add the validated and formatted value to the list
             formatted_values.append(value)
+
         return formatted_values
 
     def save_changes_to_main_file(self):
