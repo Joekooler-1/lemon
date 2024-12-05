@@ -79,7 +79,7 @@ class StatementGeneratorApp:
     def process_files(self):
         """
         Processes the main file and the moved file.
-        Flips the sign of PV, converts it to a percentage, and displays the results in Excel.
+        Flips the sign of PV and displays the results in Excel.
         """
         # Validate inputs
         if not self.main_file_path or not self.moved_file_path:
@@ -108,9 +108,6 @@ class StatementGeneratorApp:
             # Flip the sign of the PV values
             main_data['PV'] = main_data['PV'] * -1
 
-            # Convert PV to percentage
-            main_data['PV'] = main_data['PV'].apply(lambda x: f"{x * 100:.2f}%")
-
             # Get the selected date for processing
             current_date = datetime.strptime(self.date_picker.get_date(), "%Y-%m-%d")
 
@@ -120,7 +117,7 @@ class StatementGeneratorApp:
                     start_date = pd.to_datetime(row['TRADE DATE'])
                     value_to_amortize = row['P&L']
                     adjusted_pnl = calculate_amortization(start_date, current_date, value_to_amortize)
-                    combined_value = float(row['PV'].strip('%')) / 100 + adjusted_pnl  # Convert PV back to float for calculations
+                    combined_value = row['PV'] + adjusted_pnl  # Keep full precision
                     spread = row.get('SPREAD', 0)
                     bid = combined_value - (2 / 3) * spread
                     offer = combined_value + (1 / 3) * spread
