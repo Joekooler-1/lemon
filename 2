@@ -176,15 +176,15 @@ class StatementGeneratorApp:
             self.tree.column(col, width=120, anchor="w")
 
         scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
-        scroll_y.grid(row=0, column=1, sticky="ns")
+        scroll_y.grid(row=1, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=scroll_y.set)
 
         scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
-        scroll_x.grid(row=1, column=0, sticky="ew")
+        scroll_x.grid(row=2, column=0, sticky="ew")
         self.tree.configure(xscrollcommand=scroll_x.set)
 
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        frame.grid_rowconfigure(0, weight=1)
+        self.tree.grid(row=1, column=0, sticky="nsew")
+        frame.grid_rowconfigure(1, weight=1)
         frame.grid_columnconfigure(0, weight=1)
 
     # --- UI Components ---
@@ -194,6 +194,27 @@ class StatementGeneratorApp:
         """
         self.create_process_files_tab()
         self.create_edit_main_file_tab()
+
+    def create_edit_main_file_tab(self):
+        """
+        Create the tab for editing the main file.
+        """
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Edit Main File")
+
+        # Button Frame at the top
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=0, column=0, pady=5, sticky="ew")
+
+        # Buttons in a row
+        ttk.Button(button_frame, text="Save Changes", command=self.save_changes_to_main_file, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Edit Selected Row", command=self.edit_selected_row, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Add New Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
+
+        # Create Treeview below
+        self.create_treeview(frame)
+        self.populate_treeview()
 
     def create_process_files_tab(self):
         """
@@ -212,23 +233,6 @@ class StatementGeneratorApp:
         self.date_picker.grid(row=1, column=1, columnspan=2, padx=10, pady=5)
 
         ttk.Button(frame, text="Process Files", command=self.process_files).grid(row=2, column=1, padx=10, pady=10)
-
-    def create_edit_main_file_tab(self):
-        """
-        Create the tab for editing the main file.
-        """
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Edit Main File")
-
-        # Create Treeview
-        self.create_treeview(frame)
-        self.populate_treeview()
-
-        # Buttons
-        ttk.Button(frame, text="Save Changes", command=self.save_changes_to_main_file).grid(row=2, column=0, pady=10, sticky="ew")
-        ttk.Button(frame, text="Edit Selected Row", command=self.edit_selected_row).grid(row=3, column=0, pady=10, sticky="ew")
-        ttk.Button(frame, text="Add New Row", command=self.add_new_row).grid(row=4, column=0, pady=10, sticky="ew")
-        ttk.Button(frame, text="Refresh", command=self.refresh_main_file).grid(row=5, column=0, pady=10, sticky="ew")
 
     # --- Editing and Adding Rows ---
     def edit_selected_row(self):
