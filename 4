@@ -125,28 +125,23 @@ class StatementGeneratorApp:
         Searches the primary folder first, then the secondary folder.
         If found in the secondary folder, copies it to the primary folder.
         """
-        # Get the selected date from the calendar
         selected_date = self.date_picker.get_date()
         formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y-%m-%d")
         expected_file_name = f"moved_file_{formatted_date}.csv"
 
-        # Check the primary folder
         primary_path = os.path.join(PRIMARY_FOLDER, expected_file_name)
         if os.path.exists(primary_path):
             self.moved_file_path = primary_path
             self.moved_file_label.config(text=f"File found: {self.moved_file_path}")
             return
 
-        # Check the secondary folder
         secondary_path = os.path.join(SECONDARY_FOLDER, expected_file_name)
         if os.path.exists(secondary_path):
-            # Copy the file to the primary folder
             shutil.copy(secondary_path, primary_path)
             self.moved_file_path = primary_path
             self.moved_file_label.config(text=f"File copied: {self.moved_file_path}")
             return
 
-        # File not found in either folder
         self.moved_file_label.config(text="File not found in either folder.")
         self.moved_file_path = None
 
@@ -158,24 +153,20 @@ class StatementGeneratorApp:
             messagebox.showerror("Error", "Main file not loaded. Cannot add rows.")
             return
 
-        # Popup window for adding a new row
         popup = tk.Toplevel(self.root)
         popup.title("Add New Row")
         popup.geometry("500x500")
 
-        # Create input fields for each column
         entries = {}
         for i, col in enumerate(self.main_data.columns):
             tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
 
-            # Set default values or leave blank
             default_value = DEFAULT_VALUES.get(col, "")
             entry = tk.Entry(popup)
             entry.insert(0, default_value)
             entry.grid(row=i, column=1, padx=10, pady=5)
             entries[col] = entry
 
-        # Save the new row and refresh UI
         def save_row():
             try:
                 new_row = {col: entries[col].get() for col in self.main_data.columns}
@@ -186,8 +177,46 @@ class StatementGeneratorApp:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to add row: {e}")
 
-        # Add Save button to popup
         tk.Button(popup, text="Save Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
+
+    def edit_selected_row(self):
+        """
+        Edit the selected row from the Treeview.
+        """
+        selected_item = self.tree.focus()
+        if not selected_item:
+            messagebox.showerror("Error", "No row selected.")
+            return
+
+        row_values = self.tree.item(selected_item, "values")
+        popup = tk.Toplevel(self.root)
+        popup.title("Edit Selected Row")
+        popup.geometry("500x500")
+
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+
+            entry = tk.Entry(popup)
+            entry.insert(0, row_values[i])
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        def save_changes():
+            """
+            Save changes to the selected row and refresh the UI.
+            """
+            try:
+                new_values = [entries[col].get() for col in self.main_data.columns]
+                row_index = int(self.tree.index(selected_item))
+                self.main_data.iloc[row_index] = new_values
+                self.save_main_file()
+                self.refresh_main_file()
+                popup.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save changes: {e}")
+
+        tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
 
     def process_files(self):
         """
@@ -202,19 +231,15 @@ class StatementGeneratorApp:
             return
 
         try:
-            # Load moved data and trim TRADEIDENTIFIER
             moved_data = pd.read_csv(self.moved_file_path)
             moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].str[:7]
 
-            # Merge data with main file
             self.main_data['TRADEIDENTIFIER'] = self.main_data['TRADEIDENTIFIER'].astype(str)
             processed_data = self.main_data.merge(moved_data[['TRADEIDENTIFIER', 'PV']], on='TRADEIDENTIFIER', how='left')
-            processed_data['PV'] = processed_data['PV'].fillna(0) * -1  # Flip PV sign
+            processed_data['PV'] = processed_data['PV'].fillna(0) * -1
 
-            # Get selected date for amortization
             selected_date = datetime.strptime(self.date_picker.get_date(), DATE_FORMAT)
 
-            # Apply calculations
             def calculate_row(row):
                 if pd.notna(row.get('P&L')) and pd.notna(row.get('TRADE DATE')):
                     start_date = pd.to_datetime(row['TRADE DATE'])
@@ -227,7 +252,6 @@ class StatementGeneratorApp:
 
             processed_data[['Adjusted_P&L', 'Combined_Value', 'Bid', 'Offer']] = processed_data.apply(calculate_row, axis=1)
 
-            # Generate output for each FUND ID
             fund_column = "FUND ID"
             if fund_column not in processed_data.columns:
                 messagebox.showerror("Error", f"Column '{fund_column}' not found in processed data.")
@@ -245,23 +269,16 @@ class StatementGeneratorApp:
     def fill_template(self, fund_id, data):
         """
         Fill the Excel template with processed data for a specific client.
-
-        Args:
-            fund_id (str): Unique client identifier (FUND ID).
-            data (pd.DataFrame): Processed data for the client.
         """
         workbook = load_workbook(TEMPLATE_FILE_PATH)
         sheet = workbook.active
 
-        # Remove external links if present
         if hasattr(workbook, "remove_external_links"):
             workbook.remove_external_links()
 
-        # Populate FUND ID and date
         sheet["C12"] = f"DAILY_BMO - {fund_id} Lon_IRS"
         sheet["C14"] = self.date_picker.get_date()
 
-        # Insert rows dynamically
         headers = [sheet.cell(row=18, column=col).value for col in range(2, sheet.max_column + 1)]
         start_row = 18
         for idx, row in data.iterrows():
@@ -271,11 +288,9 @@ class StatementGeneratorApp:
                 value = row.get(mapped_header, "")
                 sheet.cell(row=start_row + idx + 1, column=col_idx + 2).value = value
 
-        # Save the output file
         excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
         workbook.save(excel_output_path)
 
-    # --- UI Tabs ---
     def create_tabs(self):
         """
         Create tabs for managing data and processing files.
