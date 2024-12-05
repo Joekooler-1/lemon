@@ -32,6 +32,24 @@ NUMERIC_COLUMNS = {"Receive Rate", "Bid", "Offer", "PV", "SPREAD"}
 DATE_FORMAT = "%Y-%m-%d"
 
 
+# --- Amortization Function ---
+def calculate_amortization(start_date, current_date, value):
+    """
+    Calculate the amortized value for the given time period.
+
+    Args:
+        start_date (datetime): Start date of the amortization.
+        current_date (datetime): Current date to calculate amortization.
+        value (float): Value to amortize.
+
+    Returns:
+        float: Amortized value adjusted for the elapsed time.
+    """
+    fraction_year_passed = (current_date - start_date).days / 365
+    months_passed = fraction_year_passed * 12
+    return max(0, value * (12 - months_passed) / 12)
+
+
 class StatementGeneratorApp:
     """
     A GUI application for managing and processing trade data using Tkinter.
@@ -61,6 +79,12 @@ class StatementGeneratorApp:
 
     # --- File Operations ---
     def load_main_file(self):
+        """
+        Load the main file into a DataFrame.
+
+        Returns:
+            pd.DataFrame: The loaded main file data.
+        """
         try:
             return pd.read_excel(self.main_file_path)
         except FileNotFoundError:
@@ -69,6 +93,9 @@ class StatementGeneratorApp:
             return None
 
     def save_main_file(self):
+        """
+        Save the current state of the main file to its path.
+        """
         try:
             self.main_data.to_excel(self.main_file_path, index=False)
             messagebox.showinfo("Success", "Main file saved successfully.")
@@ -76,12 +103,68 @@ class StatementGeneratorApp:
             messagebox.showerror("Error", f"Failed to save the main file: {e}")
 
     def refresh_main_file(self):
+        """
+        Reload the main file and refresh the Treeview with updated data.
+        """
         try:
             self.main_data = self.load_main_file()
             self.populate_treeview()
             messagebox.showinfo("Success", "Main file refreshed successfully.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh the main file: {e}")
+
+    def add_new_row(self):
+        """
+        Add a new row to the Treeview and refresh the file.
+        """
+        popup = tk.Toplevel(self.root)
+        popup.title("Add New Row")
+        popup.geometry("400x400")
+
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+            entry = tk.Entry(popup)
+            entry.insert(0, DEFAULT_VALUES.get(col, ""))
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        def save_row():
+            """
+            Validate and save the new row to the Treeview and main file.
+            """
+            new_row = {col: entries[col].get() for col in self.main_data.columns}
+            self.main_data = self.main_data.append(new_row, ignore_index=True)
+            self.save_main_file()
+            self.refresh_main_file()
+            popup.destroy()
+
+        tk.Button(popup, text="Add Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
+
+    def select_moved_file(self):
+        """
+        Automatically select the moved file based on the selected date.
+        Searches in the primary folder, and if not found, looks in the secondary folder and copies the file.
+        """
+        selected_date = self.date_picker.get_date()
+        formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y-%m-%d")
+        expected_file_name = f"moved_file_{formatted_date}.csv"
+
+        primary_path = os.path.join(PRIMARY_FOLDER, expected_file_name)
+        if os.path.exists(primary_path):
+            self.moved_file_path = primary_path
+            self.moved_file_label.config(text=f"File found: {self.moved_file_path}")
+            return
+
+        secondary_path = os.path.join(SECONDARY_FOLDER, expected_file_name)
+        if os.path.exists(secondary_path):
+            shutil.copy(secondary_path, primary_path)
+            self.moved_file_path = primary_path
+            self.moved_file_label.config(text=f"File copied: {self.moved_file_path}")
+            return
+
+        self.moved_file_label.config(text="File not found in either folder.")
+        self.moved_file_path = None
 
     def process_files(self):
         """
@@ -99,6 +182,15 @@ class StatementGeneratorApp:
             messagebox.showerror("Error", f"An error occurred: {e}")
 
     def preprocess_data(self, moved_data):
+        """
+        Preprocess the main and moved data, applying calculations for P&L, Bid, and Offer.
+
+        Args:
+            moved_data (pd.DataFrame): The moved file data.
+
+        Returns:
+            pd.DataFrame: The processed data.
+        """
         moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].str[:7]
         self.main_data['TRADEIDENTIFIER'] = self.main_data['TRADEIDENTIFIER'].astype(str)
 
@@ -122,6 +214,12 @@ class StatementGeneratorApp:
         return main_data
 
     def display_in_excel(self, dataframe):
+        """
+        Display the processed DataFrame in Excel with formatting.
+
+        Args:
+            dataframe (pd.DataFrame): The processed data.
+        """
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             temp_filename = tmp.name
 
@@ -146,6 +244,67 @@ class StatementGeneratorApp:
 
         os.startfile(temp_filename)
 
+    # --- Treeview Management ---
+    def populate_treeview(self):
+        """
+        Populate the Treeview with data from the main file.
+        Clears existing data in the Treeview and inserts rows from self.main_data.
+        """
+        self.tree.delete(*self.tree.get_children())
+        formatted_data = self.format_date_columns(self.main_data)
+        for _, row in formatted_data.iterrows():
+            self.tree.insert("", "end", values=list(row))
+
+    def create_treeview(self, frame):
+        """
+        Create and configure a Treeview widget for displaying data.
+
+        Args:
+            frame (ttk.Frame): The parent frame for the Treeview.
+        """
+        self.tree = ttk.Treeview(frame, show="headings", height=15)
+        self.tree["columns"] = list(self.main_data.columns)
+
+        for col in self.main_data.columns:
+            self.tree.heading(col, text=col, anchor="w")
+            self.tree.column(col, width=120, anchor="w")
+
+        scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
+        scroll_y.grid(row=1, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=scroll_y.set)
+
+        scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
+        scroll_x.grid(row=2, column=0, sticky="ew")
+        self.tree.configure(xscrollcommand=scroll_x.set)
+
+        self.tree.grid(row=1, column=0, sticky="nsew")
+        frame.grid_rowconfigure(1, weight=1)
+        frame.grid_columnconfigure(0, weight=1)
+
+    def format_date_columns(self, dataframe):
+        """
+        Format date columns in the DataFrame to the specified DATE_FORMAT.
+
+        Args:
+            dataframe (pd.DataFrame): The DataFrame to format.
+
+        Returns:
+            pd.DataFrame: The formatted DataFrame.
+        """
+        for col in DATE_COLUMNS:
+            if col in dataframe.columns:
+                dataframe[col] = dataframe[col].apply(
+                    lambda x: x if isinstance(x, str) else (x.strftime(DATE_FORMAT) if pd.notna(x) else "")
+                )
+        return dataframe
+
+    def create_tabs(self):
+        """
+        Create tabs for editing the main file and processing moved files.
+        """
+        self.create_process_files_tab()
+        self.create_edit_main_file_tab()
+
     def create_process_files_tab(self):
         """
         Create the tab for processing moved files.
@@ -163,6 +322,22 @@ class StatementGeneratorApp:
 
         ttk.Button(frame, text="Find File", command=self.select_moved_file).grid(row=2, column=0, padx=10, pady=10)
         ttk.Button(frame, text="Process Files", command=self.process_files).grid(row=2, column=1, padx=10, pady=10)
+
+    def create_edit_main_file_tab(self):
+        """
+        Create the tab for editing the main file.
+        """
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Edit Main File")
+
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=0, column=0, pady=5, sticky="ew")
+        ttk.Button(button_frame, text="Save Changes", command=self.save_main_file, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Add Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
+
+        self.create_treeview(frame)
+        self.populate_treeview()
 
 
 # --- Main Execution ---
