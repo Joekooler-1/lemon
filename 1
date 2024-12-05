@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from tkcalendar import Calendar
 import pandas as pd
 from datetime import datetime
@@ -11,14 +11,6 @@ from openpyxl.styles import numbers
 def calculate_amortization(start_date, current_date, value):
     """
     Calculate the remaining amortized value based on time elapsed.
-
-    Args:
-        start_date (datetime): The start date of the amortization period.
-        current_date (datetime): The date to calculate amortization as of.
-        value (float): The initial value to amortize.
-
-    Returns:
-        float: The remaining value after amortization.
     """
     fraction_year_passed = (current_date - start_date).days / 365
     months_passed = fraction_year_passed * 12
@@ -26,100 +18,156 @@ def calculate_amortization(start_date, current_date, value):
 
 
 class StatementGeneratorApp:
-    """
-    Main application class for processing financial statement data.
-    """
     def __init__(self, root):
         """
-        Initialize the application, setup UI components.
+        Initialize the application and its components.
         """
         self.root = root
         self.root.title("Statement Generator")
 
-        # File paths to store selected files
-        self.main_file_path = None
+        # Define the path to the main file (hardcoded)
+        self.main_file_path = "main_file.xlsx"  # Update this path to your main file
         self.moved_file_path = None
 
-        # Setup the UI
-        self.create_widgets()
+        # Load the main file into a DataFrame
+        self.main_data = self.load_main_file()
 
-    def create_widgets(self):
+        # Create tabbed interface
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True)
+
+        # Add tabs
+        self.create_edit_main_file_tab()
+        self.create_process_files_tab()
+
+    def load_main_file(self):
         """
-        Create and arrange UI components for file selection and processing.
+        Load the main file into a DataFrame.
         """
-        # Main File Selector
-        tk.Label(self.root, text="Main File:").grid(row=0, column=0, padx=10, pady=5)
-        self.main_file_label = tk.Label(self.root, text="No file selected")
-        self.main_file_label.grid(row=0, column=1, padx=10, pady=5)
-        tk.Button(self.root, text="Browse", command=self.select_main_file).grid(row=0, column=2, padx=10, pady=5)
+        try:
+            return pd.read_excel(self.main_file_path)
+        except FileNotFoundError:
+            messagebox.showerror("Error", f"Main file not found at {self.main_file_path}")
+            self.root.destroy()
+            return None
+
+    def save_main_file(self):
+        """
+        Save the current state of the main file.
+        """
+        try:
+            self.main_data.to_excel(self.main_file_path, index=False)
+            messagebox.showinfo("Success", "Main file saved successfully.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save the main file: {e}")
+
+    def create_edit_main_file_tab(self):
+        """
+        Create a tab for editing the main file.
+        """
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Edit Main File")
+
+        # Create Treeview to display and edit main file
+        self.tree = ttk.Treeview(frame, show="headings")
+        self.tree.pack(side="left", fill="both", expand=True)
+
+        # Add scrollbars
+        scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
+        scroll_y.pack(side="right", fill="y")
+        self.tree.configure(yscrollcommand=scroll_y.set)
+
+        # Populate the Treeview with data
+        self.populate_treeview()
+
+        # Add Save Button
+        save_button = ttk.Button(frame, text="Save Changes", command=self.save_changes_to_main_file)
+        save_button.pack(pady=10)
+
+    def populate_treeview(self):
+        """
+        Populate the Treeview with data from the main file.
+        """
+        self.tree["columns"] = list(self.main_data.columns)
+        for col in self.main_data.columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=100)
+
+        # Insert rows
+        for idx, row in self.main_data.iterrows():
+            self.tree.insert("", "end", values=list(row))
+
+    def save_changes_to_main_file(self):
+        """
+        Save changes made in the Treeview back to the main file DataFrame.
+        """
+        # Clear the DataFrame
+        self.main_data = pd.DataFrame(columns=self.tree["columns"])
+
+        # Rebuild the DataFrame from the Treeview
+        for row_id in self.tree.get_children():
+            row_values = self.tree.item(row_id)["values"]
+            self.main_data.loc[len(self.main_data)] = row_values
+
+        # Save the updated main file
+        self.save_main_file()
+
+    def create_process_files_tab(self):
+        """
+        Create a tab for processing the main and moved files.
+        """
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Process Files")
 
         # Moved File Selector
-        tk.Label(self.root, text="Moved File (CSV):").grid(row=1, column=0, padx=10, pady=5)
-        self.moved_file_label = tk.Label(self.root, text="No file selected")
-        self.moved_file_label.grid(row=1, column=1, padx=10, pady=5)
-        tk.Button(self.root, text="Browse", command=self.select_moved_file).grid(row=1, column=2, padx=10, pady=5)
+        tk.Label(frame, text="Moved File (CSV):").grid(row=0, column=0, padx=10, pady=5)
+        self.moved_file_label = tk.Label(frame, text="No file selected")
+        self.moved_file_label.grid(row=0, column=1, padx=10, pady=5)
+        tk.Button(frame, text="Browse", command=self.select_moved_file).grid(row=0, column=2, padx=10, pady=5)
 
         # Date Selector
-        tk.Label(self.root, text="Date:").grid(row=2, column=0, padx=10, pady=5)
-        self.date_picker = Calendar(self.root, selectmode="day", date_pattern="yyyy-mm-dd")
-        self.date_picker.grid(row=2, column=1, columnspan=2, padx=10, pady=5)
+        tk.Label(frame, text="Date:").grid(row=1, column=0, padx=10, pady=5)
+        self.date_picker = Calendar(frame, selectmode="day", date_pattern="yyyy-mm-dd")
+        self.date_picker.grid(row=1, column=1, columnspan=2, padx=10, pady=5)
 
         # Process Button
-        tk.Button(self.root, text="Process Files", command=self.process_files).grid(row=3, column=1, padx=10, pady=10)
-
-    def select_main_file(self):
-        """
-        Open a file dialog to select the main Excel file.
-        """
-        self.main_file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
-        self.main_file_label.config(text=self.main_file_path if self.main_file_path else "No file selected")
+        tk.Button(frame, text="Process Files", command=self.process_files).grid(row=2, column=1, padx=10, pady=10)
 
     def select_moved_file(self):
         """
-        Open a file dialog to select the moved CSV file.
+        Open a file dialog to select the moved file.
         """
         self.moved_file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         self.moved_file_label.config(text=self.moved_file_path if self.moved_file_path else "No file selected")
 
     def process_files(self):
         """
-        Main function to process the selected files and display the result in Excel.
+        Process the main and moved files and display the result in Excel.
         """
-        # Ensure both files are selected
-        if not self.main_file_path or not self.moved_file_path:
-            messagebox.showerror("Error", "Please select both main and moved files.")
+        if not self.moved_file_path:
+            messagebox.showerror("Error", "Please select a moved file.")
             return
 
         try:
-            # Load the main file and moved file
-            main_data = pd.read_excel(self.main_file_path)
             moved_data = pd.read_csv(self.moved_file_path)
 
             # Validate the existence of TRADEIDENTIFIER column
-            if 'TRADEIDENTIFIER' not in main_data.columns or 'TRADEIDENTIFIER' not in moved_data.columns:
+            if 'TRADEIDENTIFIER' not in self.main_data.columns or 'TRADEIDENTIFIER' not in moved_data.columns:
                 messagebox.showerror("Error", "TRADEIDENTIFIER column is missing in one of the files.")
                 return
 
             # Preprocess and merge data
-            processed_data = self.preprocess_data(main_data, moved_data)
+            processed_data = self.preprocess_data(self.main_data, moved_data)
 
             # Display the processed data in Excel
             self.display_in_excel(processed_data)
 
         except Exception as e:
-            # Display any unexpected errors to the user
             messagebox.showerror("Error", f"An error occurred: {e}")
 
     def preprocess_data(self, main_data, moved_data):
         """
         Preprocess and merge the main and moved data, and calculate additional columns.
-
-        Args:
-            main_data (DataFrame): Main Excel file data.
-            moved_data (DataFrame): Moved CSV file data.
-
-        Returns:
-            DataFrame: Processed and augmented data.
         """
         # Shorten TRADEIDENTIFIER to first 7 characters
         moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].str[:7]
@@ -155,9 +203,6 @@ class StatementGeneratorApp:
     def display_in_excel(self, dataframe):
         """
         Display the processed DataFrame in Excel with formatting.
-
-        Args:
-            dataframe (DataFrame): The processed data to display.
         """
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             temp_filename = tmp.name
@@ -167,37 +212,7 @@ class StatementGeneratorApp:
             workbook = writer.book
             worksheet = writer.sheets["Processed Data"]
 
-            # Apply custom formatting to columns
-            self.format_columns(worksheet, dataframe)
-
-        # Open the temporary file in the default Excel application
         os.startfile(temp_filename)
-
-    def format_columns(self, worksheet, dataframe):
-        """
-        Apply specific formatting to the Excel columns based on their names.
-
-        Args:
-            worksheet (Worksheet): The worksheet to format.
-            dataframe (DataFrame): The processed DataFrame.
-        """
-        for col_idx, col_name in enumerate(dataframe.columns, 1):
-            if col_name in ["TRADE DATE", "Effective Date", "Maturity Date"]:
-                # Format as date (MM/DD/YYYY)
-                for row in range(2, len(dataframe) + 2):  # Start from row 2 to skip headers
-                    worksheet.cell(row=row, column=col_idx).number_format = "mm/dd/yyyy"
-            elif col_name in ["Notional", "Notional 2"]:
-                # Format as currency
-                for row in range(2, len(dataframe) + 2):
-                    worksheet.cell(row=row, column=col_idx).number_format = "$#,##0.00"
-            elif col_name == "Pay Rate":
-                # Format as percentage (2 decimal places)
-                for row in range(2, len(dataframe) + 2):
-                    worksheet.cell(row=row, column=col_idx).number_format = "0.00%"
-            elif col_name in ["Bid", "Offer"]:
-                # Format as percentage (3 decimal places)
-                for row in range(2, len(dataframe) + 2):
-                    worksheet.cell(row=row, column=col_idx).number_format = "0.000%"
 
 
 # Run the application
