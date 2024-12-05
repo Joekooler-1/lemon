@@ -15,32 +15,22 @@ MAIN_FILE_PATH = r"C:\folder\main_file.xlsx"  # <-- Edit this to your main file 
 TEMPLATE_FILE_PATH = r"C:\folder\template.xlsx"  # <-- Edit this to your template file path
 OUTPUT_FOLDER = r"C:\folder\output"  # <-- Edit this to your output folder path
 
-# Header mappings between the template and processed data
-HEADER_MAPPING = {
-    "TRADE ID": "TRADEIDENTIFIER",  # Map template headers to data columns
-    # Add more mappings here if needed
+# Default values for new rows
+DEFAULT_VALUES = {
+    "Sub Product": "CRA SWAP",
+    "PAYER": "CHANGE",
+    "Pay": "Float",
+    "Pay Frequency": "1MO",
+    "Pay CCY": "USD",
+    "Receive": "Float",
+    "Receive Index": "USD SOFR",
+    "Receive Rate": "0.3",
+    "Receive Frequency": "1MO",
+    "Receive CCY": "USD"
 }
 
 DATE_COLUMNS = {"TRADE DATE", "Effective Date", "Maturity Date"}
 DATE_FORMAT = "%Y-%m-%d"
-
-
-# --- Amortization Function ---
-def calculate_amortization(start_date, current_date, value):
-    """
-    Calculate the amortized value for the given time period.
-
-    Args:
-        start_date (datetime): Start date of the amortization.
-        current_date (datetime): Current date to calculate amortization.
-        value (float): Value to amortize.
-
-    Returns:
-        float: Amortized value adjusted for the elapsed time.
-    """
-    fraction_year_passed = (current_date - start_date).days / 365
-    months_passed = fraction_year_passed * 12
-    return max(0, value * (12 - months_passed) / 12)
 
 
 class StatementGeneratorApp:
@@ -112,13 +102,16 @@ class StatementGeneratorApp:
         """
         popup = tk.Toplevel(self.root)
         popup.title("Add New Row")
-        popup.geometry("400x400")
+        popup.geometry("500x500")
 
         entries = {}
         for i, col in enumerate(self.main_data.columns):
             tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+
+            # Default value or empty if not in DEFAULT_VALUES
+            default_value = DEFAULT_VALUES.get(col, "")
             entry = tk.Entry(popup)
-            entry.insert(0, "")  # Default values can be added here if needed
+            entry.insert(0, default_value)
             entry.grid(row=i, column=1, padx=10, pady=5)
             entries[col] = entry
 
@@ -127,136 +120,47 @@ class StatementGeneratorApp:
             Validate and save the new row to the Treeview and main file.
             """
             new_row = {col: entries[col].get() for col in self.main_data.columns}
-            self.main_data = self.main_data.append(new_row, ignore_index=True)
+            self.main_data = pd.concat([self.main_data, pd.DataFrame([new_row])], ignore_index=True)
             self.save_main_file()
             self.refresh_main_file()
             popup.destroy()
 
         tk.Button(popup, text="Add Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
 
-    # --- Process Files ---
-    def process_files(self):
+    def edit_selected_row(self):
         """
-        Process the main and moved files, generate statements for each FUND ID.
+        Edit the selected row from the Treeview.
         """
-        if not self.moved_file_path:
-            messagebox.showerror("Error", "Please select a moved file.")
+        selected_item = self.tree.focus()
+        if not selected_item:
+            messagebox.showerror("Error", "No row selected.")
             return
 
-        if not os.path.exists(TEMPLATE_FILE_PATH):
-            messagebox.showerror("Error", f"Template file not found: {TEMPLATE_FILE_PATH}")
-            return
+        row_values = self.tree.item(selected_item, "values")
+        popup = tk.Toplevel(self.root)
+        popup.title("Edit Selected Row")
+        popup.geometry("500x500")
 
-        try:
-            # Read and process data
-            moved_data = pd.read_csv(self.moved_file_path)
-            processed_data = self.preprocess_data(moved_data)
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
 
-            # Iterate over unique FUND IDs and process their data
-            client_column = "FUND ID"  # Column for client identifier
-            if client_column not in processed_data.columns:
-                messagebox.showerror("Error", f"Column '{client_column}' not found in processed data.")
-                return
+            entry = tk.Entry(popup)
+            entry.insert(0, row_values[i])
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
 
-            unique_funds = processed_data[client_column].unique()
-            for fund_id in unique_funds:
-                client_data = processed_data[processed_data[client_column] == fund_id]
-                self.fill_template(fund_id, client_data)
+        def save_changes():
+            """
+            Save changes to the selected row.
+            """
+            new_values = [entries[col].get() for col in self.main_data.columns]
+            self.main_data.loc[self.tree.index(selected_item)] = new_values
+            self.save_main_file()
+            self.refresh_main_file()
+            popup.destroy()
 
-            messagebox.showinfo("Success", "Statements generated.")
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred: {e}")
-
-    def preprocess_data(self, moved_data):
-        """
-        Preprocess the main and moved data, applying calculations for P&L, Bid, and Offer.
-
-        Args:
-            moved_data (pd.DataFrame): The moved file data.
-
-        Returns:
-            pd.DataFrame: The processed data.
-        """
-        moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].str[:7]
-        self.main_data['TRADEIDENTIFIER'] = self.main_data['TRADEIDENTIFIER'].astype(str)
-
-        # Merge and calculate adjusted fields
-        main_data = self.main_data.merge(moved_data[['TRADEIDENTIFIER', 'PV']], on='TRADEIDENTIFIER', how='left')
-        main_data['PV'] = main_data['PV'].fillna(0) * -1
-
-        current_date = datetime.strptime(self.date_picker.get_date(), DATE_FORMAT)
-
-        def calculate_row(row):
-            if pd.notna(row.get('P&L')) and pd.notna(row.get('TRADE DATE')):
-                start_date = pd.to_datetime(row['TRADE DATE'])
-                adjusted_pnl = calculate_amortization(start_date, current_date, float(row['P&L']))
-                combined_value = row['PV'] + adjusted_pnl
-                bid = combined_value - (2 / 3) * float(row.get('SPREAD', 0))
-                offer = combined_value + (1 / 3) * float(row.get('SPREAD', 0))
-                return pd.Series([adjusted_pnl, combined_value, bid, offer])
-            return pd.Series([None, None, None, None])
-
-        main_data[['Adjusted_P&L', 'Combined_Value', 'Bid', 'Offer']] = main_data.apply(calculate_row, axis=1)
-        return main_data
-
-    # --- Fill Template ---
-    def fill_template(self, fund_id, data):
-        """
-        Fill the template with client-specific data and save as Excel.
-
-        Args:
-            fund_id (str): Unique identifier for the client (FUND ID).
-            data (pd.DataFrame): The client's processed data.
-        """
-        workbook = load_workbook(TEMPLATE_FILE_PATH)
-        sheet = workbook.active
-
-        # Remove external links if present
-        if hasattr(workbook, "remove_external_links"):
-            workbook.remove_external_links()
-
-        # Populate FUND ID and selected date
-        sheet["C12"] = f"DAILY_BMO - {fund_id} Lon_IRS"
-        sheet["C14"] = self.date_picker.get_date()
-
-        # Headers in row 18, new data starts after this
-        headers = [sheet.cell(row=18, column=col).value for col in range(2, sheet.max_column + 1)]
-        start_row = 18
-
-        # Insert new rows for data
-        for idx, row in data.iterrows():
-            # Insert a new row at the correct position
-            sheet.insert_rows(start_row + idx + 1)
-
-            # Fill in data for each column based on the headers
-            for col_idx, header in enumerate(headers):
-                mapped_header = HEADER_MAPPING.get(header, header)
-                value = row.get(mapped_header, "")
-                sheet.cell(row=start_row + idx + 1, column=col_idx + 2).value = value
-
-        # Define the output file path
-        excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
-        workbook.save(excel_output_path)
-
-    # --- Draft Email ---
-    def draft_email(self, fund_id, excel_path):
-        """
-        Draft an email for the client with their statement files attached.
-
-        Args:
-            fund_id (str): Unique identifier for the client (FUND ID).
-            excel_path (str): Path to the client's Excel file.
-        """
-        outlook = win32com.client.Dispatch("Outlook.Application")
-        mail = outlook.CreateItem(0)
-
-        try:
-            mail.Subject = f"Statement for FUND ID: {fund_id}"
-            mail.Body = f"Dear {fund_id},\n\nPlease find attached your statement for today.\n\nBest regards,"
-            mail.Attachments.Add(excel_path)
-            mail.Display(False)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to draft email for FUND ID {fund_id}: {e}")
+        tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
 
     # --- UI Setup ---
     def create_tabs(self):
@@ -296,6 +200,7 @@ class StatementGeneratorApp:
         ttk.Button(button_frame, text="Save Changes", command=self.save_main_file, width=15).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Add Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Edit Row", command=self.edit_selected_row, width=15).pack(side="left", padx=5)
 
         self.create_treeview(frame)
         self.populate_treeview()
@@ -306,8 +211,7 @@ class StatementGeneratorApp:
         Clears existing data in the Treeview and inserts rows from self.main_data.
         """
         self.tree.delete(*self.tree.get_children())
-        formatted_data = self.format_date_columns(self.main_data)
-        for _, row in formatted_data.iterrows():
+        for _, row in self.main_data.iterrows():
             self.tree.insert("", "end", values=list(row))
 
     def create_treeview(self, frame):
@@ -335,48 +239,6 @@ class StatementGeneratorApp:
         self.tree.grid(row=1, column=0, sticky="nsew")
         frame.grid_rowconfigure(1, weight=1)
         frame.grid_columnconfigure(0, weight=1)
-
-    def format_date_columns(self, dataframe):
-        """
-        Format date columns in the DataFrame to the specified DATE_FORMAT.
-
-        Args:
-            dataframe (pd.DataFrame): The DataFrame to format.
-
-        Returns:
-            pd.DataFrame: The formatted DataFrame.
-        """
-        for col in DATE_COLUMNS:
-            if col in dataframe.columns:
-                dataframe[col] = dataframe[col].apply(
-                    lambda x: x if isinstance(x, str) else (x.strftime(DATE_FORMAT) if pd.notna(x) else "")
-                )
-        return dataframe
-
-    def select_moved_file(self):
-        """
-        Automatically select the moved file based on the selected date.
-        Searches in the primary folder, and if not found, looks in the secondary folder and copies the file.
-        """
-        selected_date = self.date_picker.get_date()
-        formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y-%m-%d")
-        expected_file_name = f"moved_file_{formatted_date}.csv"
-
-        primary_path = os.path.join(PRIMARY_FOLDER, expected_file_name)
-        if os.path.exists(primary_path):
-            self.moved_file_path = primary_path
-            self.moved_file_label.config(text=f"File found: {self.moved_file_path}")
-            return
-
-        secondary_path = os.path.join(SECONDARY_FOLDER, expected_file_name)
-        if os.path.exists(secondary_path):
-            shutil.copy(secondary_path, primary_path)
-            self.moved_file_path = primary_path
-            self.moved_file_label.config(text=f"File copied: {self.moved_file_path}")
-            return
-
-        self.moved_file_label.config(text="File not found in either folder.")
-        self.moved_file_path = None
 
 
 # --- Main Execution ---
