@@ -78,6 +78,23 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save the main file: {e}")
 
+    def save_changes_to_main_file(self):
+        """
+        Save changes made in the Treeview back to the main file DataFrame.
+        Updates the self.main_data DataFrame with the current Treeview data
+        and writes it to the main file.
+        """
+        try:
+            # Clear the main DataFrame and repopulate it with Treeview data
+            self.main_data = pd.DataFrame(columns=self.tree["columns"])
+            for row_id in self.tree.get_children():
+                self.main_data.loc[len(self.main_data)] = self.tree.item(row_id)["values"]
+
+            # Save the updated data to the main file
+            self.save_main_file()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save changes: {e}")
+
     def refresh_main_file(self):
         """
         Reload the main file and refresh the Treeview with updated data.
