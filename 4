@@ -211,19 +211,30 @@ class StatementGeneratorApp:
         workbook = load_workbook(TEMPLATE_FILE_PATH)
         sheet = workbook.active
 
+        # Remove external links if present
+        if hasattr(workbook, "remove_external_links"):
+            workbook.remove_external_links()
+
         # Populate FUND ID and selected date
         sheet["C12"] = f"DAILY_BMO - {fund_id} Lon_IRS"
         sheet["C14"] = self.date_picker.get_date()
 
-        # Populate data based on headers in row 18, starting data at row 20
+        # Headers in row 18, new data starts after this
         headers = [sheet.cell(row=18, column=col).value for col in range(2, sheet.max_column + 1)]
-        start_row = 20
+        start_row = 18
+
+        # Insert new rows for data
         for idx, row in data.iterrows():
+            # Insert a new row at the correct position
+            sheet.insert_rows(start_row + idx + 1)
+
+            # Fill in data for each column based on the headers
             for col_idx, header in enumerate(headers):
                 mapped_header = HEADER_MAPPING.get(header, header)
                 value = row.get(mapped_header, "")
-                sheet.cell(row=start_row + idx, column=col_idx + 2).value = value
+                sheet.cell(row=start_row + idx + 1, column=col_idx + 2).value = value
 
+        # Define the output file path
         excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
         workbook.save(excel_output_path)
 
