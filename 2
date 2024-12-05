@@ -179,16 +179,34 @@ class StatementGeneratorApp:
         """
         Add a new row to the Treeview.
         Opens a popup window with text boxes for all columns.
+        Specific fields are pre-filled with default values.
         """
         # Create a popup window
         popup = tk.Toplevel(self.root)
         popup.title("Add New Row")
 
+        # Define default values for specific columns
+        default_values = {
+            "Sub Product": "CRA SWAP",
+            "Payer": "CHANGE",
+            "Pay": "Float",
+            "Pay Frequency": "1MO",
+            "Pay CCY": "USD",
+            "Receive": "Float",
+            "Receive Index": "USD SOFR",
+            "Receive Rate": "0.3",
+            "Receive Frequency": "1MO",
+            "Receive CCY": "USD",
+        }
+
         # Create entry fields for each column
         entries = {}
         for i, col in enumerate(self.tree["columns"]):
             tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+
+            # Pre-fill the entry with a default value if one exists
             entry = tk.Entry(popup)
+            entry.insert(0, default_values.get(col, ""))  # Insert default value or leave empty
             entry.grid(row=i, column=1, padx=10, pady=5)
             entries[col] = entry
 
