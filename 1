@@ -10,7 +10,15 @@ from openpyxl.styles import numbers
 
 def calculate_amortization(start_date, current_date, value):
     """
-    Calculate the remaining amortized value.
+    Calculate the remaining amortized value based on time elapsed.
+
+    Args:
+        start_date (datetime): The start date of the amortization period.
+        current_date (datetime): The date to calculate amortization as of.
+        value (float): The initial value to amortize.
+
+    Returns:
+        float: The remaining value after amortization.
     """
     fraction_year_passed = (current_date - start_date).days / 365
     months_passed = fraction_year_passed * 12
@@ -18,20 +26,26 @@ def calculate_amortization(start_date, current_date, value):
 
 
 class StatementGeneratorApp:
+    """
+    Main application class for processing financial statement data.
+    """
     def __init__(self, root):
+        """
+        Initialize the application, setup UI components.
+        """
         self.root = root
         self.root.title("Statement Generator")
 
-        # File paths
+        # File paths to store selected files
         self.main_file_path = None
         self.moved_file_path = None
 
-        # UI Layout
+        # Setup the UI
         self.create_widgets()
 
     def create_widgets(self):
         """
-        Create and arrange the UI components.
+        Create and arrange UI components for file selection and processing.
         """
         # Main File Selector
         tk.Label(self.root, text="Main File:").grid(row=0, column=0, padx=10, pady=5)
@@ -55,62 +69,76 @@ class StatementGeneratorApp:
 
     def select_main_file(self):
         """
-        Open file dialog to select the main file.
+        Open a file dialog to select the main Excel file.
         """
         self.main_file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
         self.main_file_label.config(text=self.main_file_path if self.main_file_path else "No file selected")
 
     def select_moved_file(self):
         """
-        Open file dialog to select the moved file.
+        Open a file dialog to select the moved CSV file.
         """
         self.moved_file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         self.moved_file_label.config(text=self.moved_file_path if self.moved_file_path else "No file selected")
 
     def process_files(self):
         """
-        Process the main and moved files to calculate values and display results in Excel.
+        Main function to process the selected files and display the result in Excel.
         """
+        # Ensure both files are selected
         if not self.main_file_path or not self.moved_file_path:
             messagebox.showerror("Error", "Please select both main and moved files.")
             return
 
         try:
-            # Load files
+            # Load the main file and moved file
             main_data = pd.read_excel(self.main_file_path)
             moved_data = pd.read_csv(self.moved_file_path)
 
-            # Validate data
+            # Validate the existence of TRADEIDENTIFIER column
             if 'TRADEIDENTIFIER' not in main_data.columns or 'TRADEIDENTIFIER' not in moved_data.columns:
                 messagebox.showerror("Error", "TRADEIDENTIFIER column is missing in one of the files.")
                 return
 
-            # Preprocess data
+            # Preprocess and merge data
             processed_data = self.preprocess_data(main_data, moved_data)
 
-            # Display in Excel
+            # Display the processed data in Excel
             self.display_in_excel(processed_data)
 
         except Exception as e:
+            # Display any unexpected errors to the user
             messagebox.showerror("Error", f"An error occurred: {e}")
 
     def preprocess_data(self, main_data, moved_data):
         """
-        Preprocess and merge main and moved data. Perform calculations.
+        Preprocess and merge the main and moved data, and calculate additional columns.
+
+        Args:
+            main_data (DataFrame): Main Excel file data.
+            moved_data (DataFrame): Moved CSV file data.
+
+        Returns:
+            DataFrame: Processed and augmented data.
         """
-        # Format TRADEIDENTIFIER and merge
+        # Shorten TRADEIDENTIFIER to first 7 characters
         moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].str[:7]
         main_data['TRADEIDENTIFIER'] = main_data['TRADEIDENTIFIER'].astype(str)
         moved_data['TRADEIDENTIFIER'] = moved_data['TRADEIDENTIFIER'].astype(str)
+
+        # Merge the PV column from the moved file into the main file
         main_data = main_data.merge(moved_data[['TRADEIDENTIFIER', 'PV']], on='TRADEIDENTIFIER', how='left')
 
-        # Flip the sign of PV
+        # Flip the sign of the PV values
         main_data['PV'] = main_data['PV'] * -1
 
-        # Perform calculations
+        # Perform amortization and calculations
         current_date = datetime.strptime(self.date_picker.get_date(), "%Y-%m-%d")
 
         def calculate_row(row):
+            """
+            Perform calculations for each row in the DataFrame.
+            """
             if pd.notna(row.get('P&L')) and pd.notna(row.get('TRADE DATE')):
                 start_date = pd.to_datetime(row['TRADE DATE'])
                 adjusted_pnl = calculate_amortization(start_date, current_date, row['P&L'])
@@ -120,12 +148,16 @@ class StatementGeneratorApp:
                 return pd.Series([adjusted_pnl, combined_value, bid, offer])
             return pd.Series([None, None, None, None])
 
+        # Apply the calculations to each row
         main_data[['Adjusted_P&L', 'Combined_Value', 'Bid', 'Offer']] = main_data.apply(calculate_row, axis=1)
         return main_data
 
     def display_in_excel(self, dataframe):
         """
-        Display the processed DataFrame in Excel with specific formatting.
+        Display the processed DataFrame in Excel with formatting.
+
+        Args:
+            dataframe (DataFrame): The processed data to display.
         """
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             temp_filename = tmp.name
@@ -135,30 +167,40 @@ class StatementGeneratorApp:
             workbook = writer.book
             worksheet = writer.sheets["Processed Data"]
 
-            # Apply formatting
+            # Apply custom formatting to columns
             self.format_columns(worksheet, dataframe)
 
+        # Open the temporary file in the default Excel application
         os.startfile(temp_filename)
 
     def format_columns(self, worksheet, dataframe):
         """
-        Apply formatting to specific columns in the Excel worksheet.
+        Apply specific formatting to the Excel columns based on their names.
+
+        Args:
+            worksheet (Worksheet): The worksheet to format.
+            dataframe (DataFrame): The processed DataFrame.
         """
         for col_idx, col_name in enumerate(dataframe.columns, 1):
             if col_name in ["TRADE DATE", "Effective Date", "Maturity Date"]:
-                for cell in worksheet.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2):
-                    cell[0].number_format = "mm/dd/yyyy"
+                # Format as date (MM/DD/YYYY)
+                for row in range(2, len(dataframe) + 2):  # Start from row 2 to skip headers
+                    worksheet.cell(row=row, column=col_idx).number_format = "mm/dd/yyyy"
             elif col_name in ["Notional", "Notional 2"]:
-                for cell in worksheet.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2):
-                    cell[0].number_format = "$#,##0.00"
+                # Format as currency
+                for row in range(2, len(dataframe) + 2):
+                    worksheet.cell(row=row, column=col_idx).number_format = "$#,##0.00"
             elif col_name == "Pay Rate":
-                for cell in worksheet.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2):
-                    cell[0].number_format = "0.00%"
+                # Format as percentage (2 decimal places)
+                for row in range(2, len(dataframe) + 2):
+                    worksheet.cell(row=row, column=col_idx).number_format = "0.00%"
             elif col_name in ["Bid", "Offer"]:
-                for cell in worksheet.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2):
-                    cell[0].number_format = "0.000%"
+                # Format as percentage (3 decimal places)
+                for row in range(2, len(dataframe) + 2):
+                    worksheet.cell(row=row, column=col_idx).number_format = "0.000%"
 
-# Run the app
+
+# Run the application
 if __name__ == "__main__":
     root = tk.Tk()
     app = StatementGeneratorApp(root)
