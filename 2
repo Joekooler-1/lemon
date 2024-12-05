@@ -79,6 +79,27 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save the main file: {e}")
 
+    def refresh_main_file(self):
+        """
+        Reload the main file and refresh the Treeview with updated data.
+        """
+        try:
+            # Reload the main file
+            self.main_data = self.load_main_file()
+
+            # Clear the Treeview
+            for row in self.tree.get_children():
+                self.tree.delete(row)
+
+            # Repopulate the Treeview
+            formatted_data = self.format_date_columns(self.main_data)
+            for _, row in formatted_data.iterrows():
+                self.tree.insert("", "end", values=list(row))
+
+            messagebox.showinfo("Success", "Main file reloaded successfully.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to reload the main file: {e}")
+
     def format_date_columns(self, dataframe):
         """
         Format date columns to display as YYYY-MM-DD.
@@ -123,7 +144,7 @@ class StatementGeneratorApp:
     # --- Tab Creation Methods ---
     def create_edit_main_file_tab(self):
         """
-        Create a tab for editing the main file with improved scrollbars, edit, and add functionalities.
+        Create a tab for editing the main file with improved scrollbars, edit, add functionalities, and refresh button.
         """
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Edit Main File")
@@ -143,6 +164,10 @@ class StatementGeneratorApp:
         # Add new row button
         add_button = ttk.Button(frame, text="Add New Row", command=self.add_new_row)
         add_button.grid(row=4, column=0, pady=10, sticky="ew")
+
+        # Refresh button
+        refresh_button = ttk.Button(frame, text="Refresh", command=self.refresh_main_file)
+        refresh_button.grid(row=5, column=0, pady=10, sticky="ew")
 
         frame.grid_rowconfigure(0, weight=1)
         frame.grid_columnconfigure(0, weight=1)
@@ -192,6 +217,7 @@ class StatementGeneratorApp:
             if new_values:
                 self.tree.item(selected_item, values=new_values)
                 self.save_changes_to_main_file()
+                self.refresh_main_file()  # Refresh the main file after saving changes
                 popup.destroy()
 
         tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
@@ -199,7 +225,7 @@ class StatementGeneratorApp:
     def add_new_row(self):
         """
         Add a new row to the Treeview.
-        Automatically saves the new row to the main file after adding.
+        Automatically saves the new row to the main file after adding and refreshes the main file.
         """
         popup = tk.Toplevel(self.root)
         popup.title("Add New Row")
@@ -217,6 +243,7 @@ class StatementGeneratorApp:
             if new_values:
                 self.tree.insert("", "end", values=new_values)
                 self.save_changes_to_main_file()
+                self.refresh_main_file()  # Refresh the main file after adding a new row
                 popup.destroy()
 
         tk.Button(popup, text="Add Row", command=add_row).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
