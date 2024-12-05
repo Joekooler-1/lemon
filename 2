@@ -11,7 +11,7 @@ from openpyxl.styles import numbers
 # Constants for default values
 DEFAULT_VALUES = {
     "Sub Product": "CRA SWAP",
-    "Payer": "CHANGE",
+    "PAYER": "CHANGE",
     "Pay": "Float",
     "Pay Frequency": "1MO",
     "Pay CCY": "USD",
@@ -82,12 +82,13 @@ class StatementGeneratorApp:
     def format_date_columns(self, dataframe):
         """
         Format date columns to display as YYYY-MM-DD.
+        Handles cases where values are strings, datetime, or NaT.
         """
         formatted_data = dataframe.copy()
         for col in DATE_COLUMNS:
             if col in formatted_data.columns:
                 formatted_data[col] = formatted_data[col].apply(
-                    lambda x: x.strftime("%Y-%m-%d") if pd.notna(x) else ""
+                    lambda x: x if isinstance(x, str) else (x.strftime("%Y-%m-%d") if pd.notna(x) else "")
                 )
         return formatted_data
 
@@ -187,10 +188,11 @@ class StatementGeneratorApp:
             entries[col] = entry
 
         def save_changes():
-            new_values = [entries[col].get() for col in self.tree["columns"]]
-            self.tree.item(selected_item, values=new_values)
-            self.save_changes_to_main_file()  # Save changes automatically
-            popup.destroy()
+            new_values = self.validate_and_format_entries(entries)
+            if new_values:
+                self.tree.item(selected_item, values=new_values)
+                self.save_changes_to_main_file()
+                popup.destroy()
 
         tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
 
@@ -211,17 +213,35 @@ class StatementGeneratorApp:
             entries[col] = entry
 
         def add_row():
-            # Insert new row into the Treeview
-            new_values = [entries[col].get() for col in self.tree["columns"]]
-            self.tree.insert("", "end", values=new_values)
-
-            # Save changes automatically
-            self.save_changes_to_main_file()
-
-            # Close the popup
-            popup.destroy()
+            new_values = self.validate_and_format_entries(entries)
+            if new_values:
+                self.tree.insert("", "end", values=new_values)
+                self.save_changes_to_main_file()
+                popup.destroy()
 
         tk.Button(popup, text="Add Row", command=add_row).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
+
+    def validate_and_format_entries(self, entries):
+        """
+        Validate and format entries before saving or adding a new row.
+        """
+        formatted_values = []
+        for col, entry in entries.items():
+            value = entry.get()
+            if col in DATE_COLUMNS:
+                try:
+                    value = datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d")
+                except ValueError:
+                    messagebox.showerror("Error", f"Invalid date format for column {col}. Use YYYY-MM-DD.")
+                    return None
+            elif col in ["Receive Rate"]:
+                try:
+                    value = f"{float(value):.3f}"  # Format to 3 decimal places
+                except ValueError:
+                    messagebox.showerror("Error", f"Invalid numeric format for column {col}.")
+                    return None
+            formatted_values.append(value)
+        return formatted_values
 
     def save_changes_to_main_file(self):
         """
