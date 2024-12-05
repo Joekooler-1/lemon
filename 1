@@ -3,7 +3,6 @@ from tkinter import filedialog, messagebox, ttk
 from tkcalendar import Calendar
 import pandas as pd
 from datetime import datetime
-import os
 
 
 def calculate_amortization(start_date, current_date, value):
@@ -59,16 +58,29 @@ class StatementGeneratorApp:
         # Process Button
         tk.Button(root, text="Process Files", command=self.process_files).grid(row=3, column=1, padx=10, pady=10)
 
-        # Data Display Treeview
-        self.tree = ttk.Treeview(root, show="headings")
-        self.tree.grid(row=4, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+        # Data Display Frame for Scrollable Treeview
+        frame = tk.Frame(root)
+        frame.grid(row=4, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
 
-        # Add Scrollbars to Treeview
-        self.scroll_x = ttk.Scrollbar(root, orient="horizontal", command=self.tree.xview)
-        self.scroll_x.grid(row=5, column=0, columnspan=3, sticky="ew")
-        self.scroll_y = ttk.Scrollbar(root, orient="vertical", command=self.tree.yview)
-        self.scroll_y.grid(row=4, column=3, sticky="ns")
-        self.tree.configure(xscrollcommand=self.scroll_x.set, yscrollcommand=self.scroll_y.set)
+        # Scrollbars
+        self.scroll_y = ttk.Scrollbar(frame, orient="vertical")
+        self.scroll_y.pack(side="right", fill="y")
+
+        self.scroll_x = ttk.Scrollbar(frame, orient="horizontal")
+        self.scroll_x.pack(side="bottom", fill="x")
+
+        # Treeview
+        self.tree = ttk.Treeview(
+            frame,
+            show="headings",
+            yscrollcommand=self.scroll_y.set,
+            xscrollcommand=self.scroll_x.set
+        )
+        self.tree.pack(side="left", fill="both", expand=True)
+
+        # Configure scrollbars
+        self.scroll_y.config(command=self.tree.yview)
+        self.scroll_x.config(command=self.tree.xview)
 
     def select_main_file(self):
         """
