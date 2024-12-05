@@ -36,9 +36,9 @@ class StatementGeneratorApp:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True)
 
-        # Add tabs
-        self.create_edit_main_file_tab()
-        self.create_process_files_tab()
+        # Add tabs in the desired order
+        self.create_process_files_tab()  # Add "Process Files" tab first
+        self.create_edit_main_file_tab()  # Add "Edit Main File" tab second
 
     def load_main_file(self):
         """
@@ -211,7 +211,7 @@ class StatementGeneratorApp:
 
     def display_in_excel(self, dataframe):
         """
-        Display the processed DataFrame in Excel with formatting.
+        Display the processed DataFrame in Excel with specific formatting.
         """
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             temp_filename = tmp.name
@@ -221,7 +221,37 @@ class StatementGeneratorApp:
             workbook = writer.book
             worksheet = writer.sheets["Processed Data"]
 
+            # Apply custom formatting to columns
+            self.format_columns(worksheet, dataframe)
+
+        # Open the temporary file in the default Excel application
         os.startfile(temp_filename)
+
+    def format_columns(self, worksheet, dataframe):
+        """
+        Apply specific formatting to the Excel columns based on their names.
+
+        Args:
+            worksheet (Worksheet): The worksheet to format.
+            dataframe (DataFrame): The processed DataFrame.
+        """
+        for col_idx, col_name in enumerate(dataframe.columns, 1):
+            if col_name in ["TRADE DATE", "Effective Date", "Maturity Date"]:
+                # Format as date (MM/DD/YYYY)
+                for row in range(2, len(dataframe) + 2):  # Start from row 2 to skip headers
+                    worksheet.cell(row=row, column=col_idx).number_format = "mm/dd/yyyy"
+            elif col_name in ["Notional", "Notional 2"]:
+                # Format as currency
+                for row in range(2, len(dataframe) + 2):
+                    worksheet.cell(row=row, column=col_idx).number_format = "$#,##0.00"
+            elif col_name == "Pay Rate":
+                # Format as percentage (2 decimal places)
+                for row in range(2, len(dataframe) + 2):
+                    worksheet.cell(row=row, column=col_idx).number_format = "0.00%"
+            elif col_name in ["Bid", "Offer"]:
+                # Format as percentage with 3 decimal places
+                for row in range(2, len(dataframe) + 2):
+                    worksheet.cell(row=row, column=col_idx).number_format = "0.000%"
 
 
 # Run the application
