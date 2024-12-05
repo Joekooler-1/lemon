@@ -146,7 +146,79 @@ class StatementGeneratorApp:
         self.moved_file_label.config(text="File not found in either folder.")
         self.moved_file_path = None
 
-    # --- Data Processing ---
+    def add_new_row(self):
+        """
+        Add a new row to the Treeview and main file.
+        """
+        if self.main_data is None:
+            messagebox.showerror("Error", "Main file not loaded. Cannot add rows.")
+            return
+
+        popup = tk.Toplevel(self.root)
+        popup.title("Add New Row")
+        popup.geometry("500x500")
+
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+
+            default_value = DEFAULT_VALUES.get(col, "")
+            entry = tk.Entry(popup)
+            entry.insert(0, default_value)
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        def save_row():
+            try:
+                new_row = {col: entries[col].get() for col in self.main_data.columns}
+                self.main_data = pd.concat([self.main_data, pd.DataFrame([new_row])], ignore_index=True)
+                self.save_main_file()
+                self.refresh_main_file()
+                popup.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to add row: {e}")
+
+        tk.Button(popup, text="Save Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
+
+    def edit_selected_row(self):
+        """
+        Edit the selected row from the Treeview.
+        """
+        selected_item = self.tree.focus()
+        if not selected_item:
+            messagebox.showerror("Error", "No row selected.")
+            return
+
+        row_values = self.tree.item(selected_item, "values")
+        popup = tk.Toplevel(self.root)
+        popup.title("Edit Selected Row")
+        popup.geometry("500x500")
+
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+
+            entry = tk.Entry(popup)
+            entry.insert(0, row_values[i])
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        def save_changes():
+            """
+            Save changes to the selected row and refresh the UI.
+            """
+            try:
+                new_values = [entries[col].get() for col in self.main_data.columns]
+                row_index = int(self.tree.index(selected_item))
+                self.main_data.iloc[row_index] = new_values
+                self.save_main_file()
+                self.refresh_main_file()
+                popup.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save changes: {e}")
+
+        tk.Button(popup, text="Save Changes", command=save_changes).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
+
     def process_files(self):
         """
         Process the main and moved files, generate calculations, and prepare the output.
@@ -283,6 +355,8 @@ class StatementGeneratorApp:
         button_frame.grid(row=0, column=0, pady=5, sticky="ew")
         ttk.Button(button_frame, text="Save Changes", command=self.save_main_file, width=15).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Add Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Edit Row", command=self.edit_selected_row, width=15).pack(side="left", padx=5)
 
         self.create_treeview(frame)
         self.populate_treeview()
