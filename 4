@@ -7,11 +7,10 @@ import os
 import shutil
 import tempfile
 from openpyxl import load_workbook
-import win32com.client
+import win32com.client.gencache
 
 
 # --- Editable Constants ---
-# Configure these paths and mappings based on your requirements
 PRIMARY_FOLDER = r"C:\folder\primary"  # <-- Edit this to your primary folder path
 SECONDARY_FOLDER = r"C:\folder\secondary"  # <-- Edit this to your secondary folder path
 MAIN_FILE_PATH = r"C:\folder\main_file.xlsx"  # <-- Edit this to your main file path
@@ -109,6 +108,34 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh the main file: {e}")
 
+    def add_new_row(self):
+        """
+        Add a new row to the Treeview and refresh the file.
+        """
+        popup = tk.Toplevel(self.root)
+        popup.title("Add New Row")
+        popup.geometry("400x400")
+
+        entries = {}
+        for i, col in enumerate(self.main_data.columns):
+            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
+            entry = tk.Entry(popup)
+            entry.insert(0, "")  # Default values can be added here if needed
+            entry.grid(row=i, column=1, padx=10, pady=5)
+            entries[col] = entry
+
+        def save_row():
+            """
+            Validate and save the new row to the Treeview and main file.
+            """
+            new_row = {col: entries[col].get() for col in self.main_data.columns}
+            self.main_data = self.main_data.append(new_row, ignore_index=True)
+            self.save_main_file()
+            self.refresh_main_file()
+            popup.destroy()
+
+        tk.Button(popup, text="Add Row", command=save_row).grid(row=len(self.main_data.columns), column=0, columnspan=2, pady=10)
+
     # --- Process Files ---
     def process_files(self):
         """
@@ -187,48 +214,26 @@ class StatementGeneratorApp:
         Returns:
             tuple: Paths to the saved Excel and PDF files.
         """
-        # Load the template
         workbook = load_workbook(TEMPLATE_FILE_PATH)
         sheet = workbook.active
 
-        # Populate `C12` with the unique FUND ID
+        # Populate FUND ID and selected date
         sheet["C12"] = f"DAILY_BMO - {fund_id} Lon_IRS"
+        sheet["C14"] = self.date_picker.get_date()
 
-        # Populate `C14` with the selected date from the date picker
-        selected_date = self.date_picker.get_date()
-        sheet["C14"] = selected_date  # Automatically applies the desired format if set in the template
-
-        # Get the headers from row 18 (starting from column B)
-        template_headers = []
-        col = 2  # Column index for column B
-        while sheet.cell(row=18, column=col).value:
-            template_headers.append(sheet.cell(row=18, column=col).value)
-            col += 1
-
-        # Ensure all required headers exist in the processed data
-        unmatched_headers = [
-            header for header in template_headers if HEADER_MAPPING.get(header, header) not in data.columns
-        ]
-        if unmatched_headers:
-            raise ValueError(f"Missing headers in processed data: {unmatched_headers}")
-
-        # Write data under headers, starting from row 20
+        # Populate data based on headers in row 18, starting data at row 20
+        headers = [sheet.cell(row=18, column=col).value for col in range(2, sheet.max_column + 1)]
         start_row = 20
         for idx, row in data.iterrows():
-            for col_idx, header in enumerate(template_headers):
-                # Map the header to the correct column in the data
-                data_column = HEADER_MAPPING.get(header, header)  # Use the mapping or the header itself
-                value = row[data_column]  # Get the value for the current header
-                sheet.cell(row=start_row + idx, column=col_idx + 2).value = value  # Write value to the corresponding cell
+            for col_idx, header in enumerate(headers):
+                mapped_header = HEADER_MAPPING.get(header, header)
+                value = row.get(mapped_header, "")
+                sheet.cell(row=start_row + idx, column=col_idx + 2).value = value
 
-        # Define output paths
         excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
         pdf_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.pdf")
 
-        # Save the filled Excel file
         workbook.save(excel_output_path)
-
-        # Convert Excel to PDF
         self.convert_to_pdf(excel_output_path, pdf_output_path)
 
         return excel_output_path, pdf_output_path
@@ -242,17 +247,21 @@ class StatementGeneratorApp:
             excel_path (str): Path to the Excel file.
             pdf_path (str): Path to save the PDF.
         """
-        excel = win32com.client.Dispatch("Excel.Application")
-        excel.Visible = False
-
         try:
+            excel = win32com.client.gencache.EnsureDispatch("Excel.Application")
+            try:
+                excel.Visible = False
+            except Exception as e:
+                print(f"Warning: Could not set Excel visibility: {e}")
+
             workbook = excel.Workbooks.Open(excel_path)
-            workbook.ExportAsFixedFormat(0, pdf_path)  # 0 corresponds to PDF format
+            workbook.ExportAsFixedFormat(0, pdf_path)
             workbook.Close(False)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to convert Excel to PDF: {e}")
         finally:
-            excel.Quit()
+            if "excel" in locals():
+                excel.Quit()
 
     # --- Draft Email ---
     def draft_email(self, fund_id, excel_path, pdf_path):
@@ -272,9 +281,7 @@ class StatementGeneratorApp:
             mail.Body = f"Dear {fund_id},\n\nPlease find attached your statement for today.\n\nBest regards,"
             mail.Attachments.Add(excel_path)
             mail.Attachments.Add(pdf_path)
-
-            # Open the draft email
-            mail.Display(False)  # False means it won't send automatically
+            mail.Display(False)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to draft email for FUND ID {fund_id}: {e}")
 
@@ -315,6 +322,7 @@ class StatementGeneratorApp:
         button_frame.grid(row=0, column=0, pady=5, sticky="ew")
         ttk.Button(button_frame, text="Save Changes", command=self.save_main_file, width=15).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Add Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
 
         self.create_treeview(frame)
         self.populate_treeview()
