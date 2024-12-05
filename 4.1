@@ -42,6 +42,7 @@ DEFAULT_VALUES = {
 DATE_COLUMNS = {"TRADE DATE", "Effective Date", "Maturity Date"}
 DATE_FORMAT = "%Y-%m-%d"
 
+
 def calculate_amortization(start_date, current_date, value):
     """
     Calculate the amortized value for the given time period.
@@ -57,6 +58,7 @@ def calculate_amortization(start_date, current_date, value):
     fraction_year_passed = (current_date - start_date).days / 365
     months_passed = fraction_year_passed * 12
     return max(0, value * (12 - months_passed) / 12)
+
 
 class StatementGeneratorApp:
     """
