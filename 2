@@ -4,9 +4,15 @@ from tkcalendar import Calendar
 import pandas as pd
 from datetime import datetime
 import os
+import shutil
 import tempfile
 from openpyxl.styles import numbers
 
+
+# --- Editable Constants ---
+PRIMARY_FOLDER = r"C:\folder\primary"  # <-- Edit this to your primary folder path
+SECONDARY_FOLDER = r"C:\folder\secondary"  # <-- Edit this to your secondary folder path
+MAIN_FILE_PATH = r"C:\folder\main_file.xlsx"  # <-- Edit this to your main file path
 
 # --- Constants ---
 DEFAULT_VALUES = {
@@ -60,7 +66,7 @@ class StatementGeneratorApp:
         self.root.title("Statement Generator")
 
         # Paths
-        self.main_file_path = r"C:\folder\main_file.xlsx"  # Change to your main file path
+        self.main_file_path = MAIN_FILE_PATH
         self.moved_file_path = None
 
         # Load data
@@ -96,144 +102,37 @@ class StatementGeneratorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save the main file: {e}")
 
-    def save_changes_to_main_file(self):
-        """
-        Save changes made in the Treeview back to the main file DataFrame.
-        Updates the self.main_data DataFrame with the current Treeview data
-        and writes it to the main file.
-        """
-        try:
-            # Clear the main DataFrame and repopulate it with Treeview data
-            self.main_data = pd.DataFrame(columns=self.tree["columns"])
-            for row_id in self.tree.get_children():
-                self.main_data.loc[len(self.main_data)] = self.tree.item(row_id)["values"]
-
-            # Save the updated data to the main file
-            self.save_main_file()
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save changes: {e}")
-
-    def refresh_main_file(self):
-        """
-        Reload the main file and refresh the Treeview with updated data.
-        """
-        self.main_data = self.load_main_file()
-        self.populate_treeview()
-
-    # --- Treeview Management ---
-    def populate_treeview(self):
-        """
-        Populate the Treeview with data from the main file.
-        Clears existing data in the Treeview and inserts rows from self.main_data.
-        """
-        # Clear existing rows in the Treeview
-        self.tree.delete(*self.tree.get_children())
-
-        # Format date columns in the DataFrame
-        formatted_data = self.format_date_columns(self.main_data)
-
-        # Insert each row into the Treeview
-        for _, row in formatted_data.iterrows():
-            self.tree.insert("", "end", values=list(row))
-
-    def create_treeview(self, frame):
-        """
-        Create and configure a Treeview widget for displaying data.
-
-        Args:
-            frame (ttk.Frame): The parent frame for the Treeview.
-        """
-        self.tree = ttk.Treeview(frame, show="headings", height=15)
-        self.tree["columns"] = list(self.main_data.columns)
-
-        for col in self.main_data.columns:
-            self.tree.heading(col, text=col, anchor="w")
-            self.tree.column(col, width=120, anchor="w")
-
-        scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
-        scroll_y.grid(row=1, column=1, sticky="ns")
-        self.tree.configure(yscrollcommand=scroll_y.set)
-
-        scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
-        scroll_x.grid(row=2, column=0, sticky="ew")
-        self.tree.configure(xscrollcommand=scroll_x.set)
-
-        self.tree.grid(row=1, column=0, sticky="nsew")
-        frame.grid_rowconfigure(1, weight=1)
-        frame.grid_columnconfigure(0, weight=1)
-
-    # --- Data Formatting ---
-    def format_date_columns(self, dataframe):
-        """
-        Format date columns in the DataFrame to the specified DATE_FORMAT.
-
-        Args:
-            dataframe (pd.DataFrame): The DataFrame to format.
-
-        Returns:
-            pd.DataFrame: The formatted DataFrame.
-        """
-        for col in DATE_COLUMNS:
-            if col in dataframe.columns:
-                dataframe[col] = dataframe[col].apply(
-                    lambda x: x if isinstance(x, str) else (x.strftime(DATE_FORMAT) if pd.notna(x) else "")
-                )
-        return dataframe
-
-    # --- UI Components ---
-    def create_tabs(self):
-        """
-        Create tabs for editing the main file and processing moved files.
-        """
-        self.create_process_files_tab()
-        self.create_edit_main_file_tab()
-
-    def create_process_files_tab(self):
-        """
-        Create the tab for processing moved files.
-        """
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Process Files")
-
-        tk.Label(frame, text="Moved File (CSV):").grid(row=0, column=0, padx=10, pady=5)
-        self.moved_file_label = tk.Label(frame, text="No file selected")
-        self.moved_file_label.grid(row=0, column=1, padx=10, pady=5)
-        ttk.Button(frame, text="Browse", command=self.select_moved_file).grid(row=0, column=2, padx=10, pady=5)
-
-        tk.Label(frame, text="Date:").grid(row=1, column=0, padx=10, pady=5)
-        self.date_picker = Calendar(frame, selectmode="day", date_pattern="yyyy-mm-dd")
-        self.date_picker.grid(row=1, column=1, columnspan=2, padx=10, pady=5)
-
-        ttk.Button(frame, text="Process Files", command=self.process_files).grid(row=2, column=1, padx=10, pady=10)
-
-    def create_edit_main_file_tab(self):
-        """
-        Create the tab for editing the main file.
-        """
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Edit Main File")
-
-        # Button Frame at the top
-        button_frame = ttk.Frame(frame)
-        button_frame.grid(row=0, column=0, pady=5, sticky="ew")
-
-        # Buttons in a row
-        ttk.Button(button_frame, text="Save Changes", command=self.save_changes_to_main_file, width=15).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Edit Selected Row", command=self.edit_selected_row, width=15).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Add New Row", command=self.add_new_row, width=15).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
-
-        # Create Treeview below
-        self.create_treeview(frame)
-        self.populate_treeview()
-
-    # --- Processing Files ---
     def select_moved_file(self):
         """
-        Open a file dialog to select a moved file.
+        Automatically select the moved file based on the selected date.
+        Searches in the primary folder, and if not found, looks in the secondary folder and copies the file.
         """
-        self.moved_file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        self.moved_file_label.config(text=self.moved_file_path if self.moved_file_path else "No file selected")
+        # Get the selected date from the calendar
+        selected_date = self.date_picker.get_date()
+        formatted_date = datetime.strptime(selected_date, "%Y-%m-%d").strftime("%Y%m%d")
+        expected_file_name = f"moved_file_{formatted_date}.csv"
+
+        # Search in the primary folder
+        primary_path = os.path.join(PRIMARY_FOLDER, expected_file_name)
+        if os.path.exists(primary_path):
+            self.moved_file_path = primary_path
+            self.moved_file_label.config(text=f"File found: {self.moved_file_path}")
+            return
+
+        # Search in the secondary folder
+        secondary_path = os.path.join(SECONDARY_FOLDER, expected_file_name)
+        if os.path.exists(secondary_path):
+            # Copy the file to the primary folder
+            shutil.copy(secondary_path, primary_path)
+            self.moved_file_path = primary_path
+            self.moved_file_label.config(
+                text=f"File copied from secondary folder to primary folder: {self.moved_file_path}"
+            )
+            return
+
+        # File not found
+        self.moved_file_label.config(text="File not found in either folder.")
+        self.moved_file_path = None
 
     def process_files(self):
         """
@@ -313,69 +212,75 @@ class StatementGeneratorApp:
 
         os.startfile(temp_filename)
 
-    # --- Editing Rows ---
-    def edit_selected_row(self):
+    # --- UI Components ---
+    def create_tabs(self):
         """
-        Edit the selected row in the Treeview.
+        Create tabs for editing the main file and processing moved files.
         """
-        selected_item = self.tree.focus()
-        if not selected_item:
-            messagebox.showwarning("Warning", "No row selected.")
-            return
+        self.create_process_files_tab()
+        self.create_edit_main_file_tab()
 
-        current_values = self.tree.item(selected_item)["values"]
-        popup = self.create_popup("Edit Row", current_values)
-
-        def save_changes():
-            new_values = self.validate_and_format_entries(popup["entries"])
-            if new_values:
-                self.tree.item(selected_item, values=new_values)
-                self.save_changes_to_main_file()
-                self.refresh_main_file()
-                popup["window"].destroy()
-
-        ttk.Button(popup["window"], text="Save Changes", command=save_changes).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
-
-    def add_new_row(self):
+    def create_process_files_tab(self):
         """
-        Add a new row to the Treeview and refresh the file.
+        Create the tab for processing moved files.
         """
-        popup = self.create_popup("Add New Row")
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Process Files")
 
-        def add_row():
-            new_values = self.validate_and_format_entries(popup["entries"])
-            if new_values:
-                self.tree.insert("", "end", values=new_values)
-                self.save_changes_to_main_file()
-                self.refresh_main_file()
-                popup["window"].destroy()
+        tk.Label(frame, text="Moved File (CSV):").grid(row=0, column=0, padx=10, pady=5)
+        self.moved_file_label = tk.Label(frame, text="No file selected")
+        self.moved_file_label.grid(row=0, column=1, padx=10, pady=5)
 
-        ttk.Button(popup["window"], text="Add Row", command=add_row).grid(row=len(self.tree["columns"]), column=0, columnspan=2, pady=10)
+        tk.Label(frame, text="Date:").grid(row=1, column=0, padx=10, pady=5)
+        self.date_picker = Calendar(frame, selectmode="day", date_pattern="yyyy-mm-dd")
+        self.date_picker.grid(row=1, column=1, columnspan=2, padx=10, pady=5)
 
-    def create_popup(self, title, default_values=None):
+        ttk.Button(frame, text="Find File", command=self.select_moved_file).grid(row=2, column=1, padx=10, pady=10)
+
+    def create_edit_main_file_tab(self):
         """
-        Create a popup window for adding or editing a row.
+        Create the tab for editing the main file.
+        """
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Edit Main File")
+
+        # Button Frame at the top
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=0, column=0, pady=5, sticky="ew")
+
+        # Buttons in a row
+        ttk.Button(button_frame, text="Save Changes", command=self.save_main_file, width=15).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Refresh", command=self.refresh_main_file, width=15).pack(side="left", padx=5)
+
+        # Create Treeview below
+        self.create_treeview(frame)
+        self.populate_treeview()
+
+    def create_treeview(self, frame):
+        """
+        Create and configure a Treeview widget for displaying data.
 
         Args:
-            title (str): The title of the popup window.
-            default_values (list, optional): Default values for the row. Defaults to None.
-
-        Returns:
-            dict: Contains the popup window and the Entry widgets for each column.
+            frame (ttk.Frame): The parent frame for the Treeview.
         """
-        popup = tk.Toplevel(self.root)
-        popup.title(title)
-        entries = {}
+        self.tree = ttk.Treeview(frame, show="headings", height=15)
+        self.tree["columns"] = list(self.main_data.columns)
 
-        for i, col in enumerate(self.tree["columns"]):
-            tk.Label(popup, text=col).grid(row=i, column=0, padx=10, pady=5)
-            entry = tk.Entry(popup)
-            value = default_values[i] if default_values else DEFAULT_VALUES.get(col, "")
-            entry.insert(0, value)
-            entry.grid(row=i, column=1, padx=10, pady=5)
-            entries[col] = entry
+        for col in self.main_data.columns:
+            self.tree.heading(col, text=col, anchor="w")
+            self.tree.column(col, width=120, anchor="w")
 
-        return {"window": popup, "entries": entries}
+        scroll_y = ttk.Scrollbar(frame, orient="vertical", command=self.tree.yview)
+        scroll_y.grid(row=1, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=scroll_y.set)
+
+        scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=self.tree.xview)
+        scroll_x.grid(row=2, column=0, sticky="ew")
+        self.tree.configure(xscrollcommand=scroll_x.set)
+
+        self.tree.grid(row=1, column=0, sticky="nsew")
+        frame.grid_rowconfigure(1, weight=1)
+        frame.grid_columnconfigure(0, weight=1)
 
 
 # --- Main Execution ---
