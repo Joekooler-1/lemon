@@ -197,11 +197,15 @@ class StatementGeneratorApp:
         percentage_format = "0.000%"
 
         for idx, row in data.iterrows():
-            sheet.insert_rows(start_row + idx + 1)
+            row_index = start_row + idx  # Reset start row for each new fund ID
             for col_idx, header in enumerate(headers):
                 mapped_header = HEADER_MAPPING.get(header, header)
                 value = row.get(mapped_header, "")
-                cell = sheet.cell(row=start_row + idx + 1, column=col_idx + 2)
+
+                if header in ["TRADE ID", "TRADE DATE"] and mapped_header in row:
+                    value = row[mapped_header]
+
+                cell = sheet.cell(row=row_index, column=col_idx + 2)
                 cell.value = value
 
                 cell.alignment = center_alignment
