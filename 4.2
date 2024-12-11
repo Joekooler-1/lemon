@@ -15,11 +15,11 @@ MAIN_FILE_PATH = r"C:\folder\main_file.xlsx"
 TEMPLATE_FILE_PATH = r"C:\folder\template.xlsx"
 OUTPUT_FOLDER = r"C:\folder\output"
 HEADER_MAPPING = {
-    "TRADE ID": "TRADEIDENTIFIER",
+    "Trade ID": "TRADEIDENTIFIER",
     "Adjusted P&L": "Adjusted_P&L",
     "Bid": "Bid",
     "Offer": "Offer",
-    "TRADE DATE": "TRADE DATE",
+    "Trade Date": "TRADE DATE",
     "SPREAD": "SPREAD"
 }
 DEFAULT_VALUES = {
@@ -189,20 +189,20 @@ class StatementGeneratorApp:
         sheet.title = f"BMO - {fund_id}"
 
         headers = [sheet.cell(row=18, column=col).value for col in range(2, sheet.max_column + 1)]
-        start_row = 19  # Start below the template headers
+        start_row = 18
 
         center_alignment = Alignment(horizontal="center", vertical="center")
         default_font = Font(size=8)
         currency_format = "#,##0.00"
         percentage_format = "0.000%"
 
+        current_row = start_row  # Reset current row for each fund ID
         for idx, row in data.iterrows():
-            row_index = start_row + idx  # Reset start row for each new fund ID
+            sheet.insert_rows(current_row + 1)  # Insert new row after the header
             for col_idx, header in enumerate(headers):
                 mapped_header = HEADER_MAPPING.get(header, header)
                 value = row.get(mapped_header, "")
-
-                cell = sheet.cell(row=row_index, column=col_idx + 2)
+                cell = sheet.cell(row=current_row + 1, column=col_idx + 2)
                 cell.value = value
 
                 cell.alignment = center_alignment
@@ -212,6 +212,7 @@ class StatementGeneratorApp:
                     cell.number_format = currency_format
                 elif header in ["Pay Rate", "BID", "OFFER"]:
                     cell.number_format = percentage_format
+            current_row += 1  # Move to the next row for the current data
 
         excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
         workbook.save(excel_output_path)
