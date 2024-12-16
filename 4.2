@@ -214,7 +214,7 @@ class StatementGeneratorApp:
                     cell.number_format = percentage_format
             current_row += 1  # Move to the next row for the current data
 
-        excel_output_path = os.path.join(OUTPUT_FOLDER, f"{fund_id}_statement.xlsx")
+        excel_output_path = os.path.join(OUTPUT_FOLDER, f"VAL -({self.date_picker.get_date()})-DAILY-{fund_id}_Lon_IRS.xlsx")
         workbook.save(excel_output_path)
 
     # --- Row Operations ---
